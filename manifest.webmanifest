@@ -1,0 +1,16 @@
+{
+  "name": "CIFEAPORC · Chato murciano",
+  "short_name": "CIFEAPORC",
+  "description": "Gestión de la explotación porcina del centro",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F3F5F2",
+  "theme_color": "#2F6B4F",
+  "icons": [
+    { "src": "img/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "img/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
