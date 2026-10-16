@@ -42,7 +42,8 @@
     if (/duplicate key/i.test(m)) return 'Ya existe un registro con ese crotal o alias.';
     if (/already registered|already been registered|User already/i.test(m)) return 'Ese alias ya existe en esa granja.';
     if (/Email not confirmed/i.test(m)) return 'La cuenta no está confirmada: en Supabase hay que desactivar "Confirm email" (ver guía).';
-    if (/rate limit|too many/i.test(m)) return 'Demasiados intentos seguidos. Espera unos minutos y vuelve a probar.';
+    if (/email rate limit/i.test(m)) return 'Supabase está intentando enviar correos de confirmación: desactiva "Confirm email" en Authentication → Sign In / Providers → Email y vuelve a probar. (' + m + ')';
+    if (/rate limit|too many/i.test(m)) return 'Demasiados intentos seguidos. Espera unos minutos y vuelve a probar. (' + m + ')';
     if (/Signups not allowed/i.test(m)) return 'El alta de usuarios está desactivada en Supabase (ver guía de puesta en marcha).';
     if (/Password should be/i.test(m)) return 'El PIN debe tener 6 cifras.';
     return m;
