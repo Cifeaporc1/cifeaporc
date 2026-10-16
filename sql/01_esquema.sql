@@ -63,7 +63,7 @@ create table public.eventos (
   granja_id      smallint not null references public.granjas(id),
   cerda_id       uuid not null references public.cerdas(id) on delete cascade,
   tipo           text not null check (tipo in
-                   ('ia','eco','paridera','parto','adopcion','baja_lechones','destete','traslado','nota')),
+                   ('ia','eco','paridera','parto','aborto','adopcion','baja_lechones','destete','traslado','nota')),
   fecha          date not null,
   datos          jsonb not null default '{}'::jsonb,
   autor          uuid references auth.users(id) on delete set null,

@@ -13,6 +13,7 @@
     idcMin: 4, idcMax: 6,          // intervalo destete-cubrición
     destetadosMin: 7, destetadosMax: 9,
     dosisAviso: 4, dosisCaduca: 5, // el día de extracción es el día 0
+    sinEcoDias: 35,      // a partir de aquí, una IA sin ecografía se trata como posible gestación
   };
 
   const CAPACIDAD = { 'Vacías': 10, 'Gestación': 8, 'Implantación': 12, 'Partos': 1 };
@@ -47,7 +48,7 @@
     let cur = null, fase = 'vacia', ubicacion = null, ultimoDestete = null, partos = 0;
 
     const nuevoCiclo = (ia) => ({
-      ia, ecos: [], paridera: null, parto: null, adopciones: [], bajas: [], destete: null,
+      ia, ecos: [], paridera: null, parto: null, aborto: null, adopciones: [], bajas: [], destete: null,
       cierre: null, numParto: null, destetePrevio: ultimoDestete,
     });
 
@@ -72,6 +73,10 @@
           if (!cur) { cur = nuevoCiclo(null); ciclos.push(cur); }
           cur.parto = e; partos += 1; cur.numParto = partos; fase = 'lactante';
           break;
+        case 'aborto':
+          if (cur) { cur.aborto = e; cur.cierre = 'aborto'; }
+          cur = null; fase = 'vacia';
+          break;
         case 'adopcion':
           if (cur) cur.adopciones.push(e);
           break;
@@ -94,8 +99,8 @@
   function camada(ciclo) {
     if (!ciclo || !ciclo.parto) return null;
     const p = ciclo.parto.datos || {};
-    const vivos = n(p.vivos_h) + n(p.vivos_m);
-    const muertos = n(p.muertos_h) + n(p.muertos_m);
+    const vivos = n(p.vivos_h) + n(p.vivos_m) + n(p.vivos_ss); // _ss: sin sexar (histórico)
+    const muertos = n(p.muertos_h) + n(p.muertos_m) + n(p.muertos_ss);
     const momias = n(p.momificados);
     let entran = 0, salen = 0;
     for (const a of ciclo.adopciones) {
@@ -106,7 +111,7 @@
     let destetados = null, bajasCalculadas = null;
     if (ciclo.destete) {
       const dd = ciclo.destete.datos || {};
-      destetados = n(dd.destetados_h) + n(dd.destetados_m);
+      destetados = n(dd.destetados_h) + n(dd.destetados_m) + n(dd.destetados_ss);
       bajasCalculadas = vivos + entran - salen - destetados;
     }
     return { vivos, muertos, momias, totales: vivos + muertos + momias, entran, salen, bajas, actuales, destetados, bajasCalculadas };
@@ -145,7 +150,11 @@
       const add = (titulo, detalle, fecha, nivel) =>
         out.push({ cerdaId: c.id, crotal: c.crotal, titulo, detalle, fecha, nivel });
 
-      if (est.fase === 'inseminada' && cur && cur.ia) {
+      // IA de hace más de 35 días sin ninguna ecografía: se trata como posible gestación
+      // (avisa de paridera y parto) y se pide confirmarla.
+      const sinEco = est.fase === 'inseminada' && cur && cur.ia && cur.ecos.length === 0 && dias(cur.ia.fecha, hoy) >= REF.sinEcoDias;
+      if (sinEco) add('Gestación sin ecografía registrada', `Día ${dias(cur.ia.fecha, hoy)} tras la IA · registra la ecografía o la repetición`, cur.ia.fecha, 'proximo');
+      if (est.fase === 'inseminada' && cur && cur.ia && !sinEco) {
         const ultimaEco = cur.ecos[cur.ecos.length - 1];
         if (ultimaEco && ultimaEco.datos.resultado === 'dudosa') {
           const toca = sumarDias(ultimaEco.fecha, 1);
@@ -155,11 +164,11 @@
           add('Ecografía pendiente', `Día ${d} tras la IA (recomendado día ${REF.ecoIdeal})`, f.ecoDesde, d >= REF.ecoIdeal ? 'urgente' : 'proximo');
         }
       }
-      if (est.fase === 'gestante' && cur && cur.ia && !cur.paridera) {
+      if ((est.fase === 'gestante' || sinEco) && cur && cur.ia && !cur.paridera && dias(hoy, f.parto) >= 0) {
         const faltan = dias(hoy, f.paridera);
         if (faltan <= 3) add('Entrada en paridera', faltan < 0 ? `Prevista hace ${-faltan} ${-faltan === 1 ? 'día' : 'días'} · confirmar sala y paridera` : faltan === 0 ? 'Prevista hoy · confirmar sala y paridera' : faltan === 1 ? 'Prevista mañana' : `Prevista en ${faltan} días`, f.paridera, faltan <= 0 ? 'urgente' : 'proximo');
       }
-      if ((est.fase === 'gestante' || est.fase === 'paridera') && cur && cur.ia) {
+      if ((est.fase === 'gestante' || est.fase === 'paridera' || sinEco) && cur && cur.ia) {
         const faltan = dias(hoy, f.parto);
         if (faltan <= 7) add('Parto previsto', faltan < 0 ? `Previsto hace ${-faltan} ${-faltan === 1 ? 'día' : 'días'}` : faltan === 0 ? 'Previsto hoy' : faltan === 1 ? 'Previsto mañana' : `En ${faltan} días`, f.parto, faltan <= 1 ? 'urgente' : 'proximo');
       }
@@ -235,6 +244,10 @@
       }
       if (n(v.vivos_h) + n(v.vivos_m) + n(v.muertos_h) + n(v.muertos_m) + n(v.momificados) === 0)
         errores.push('Indica cuántos lechones han nacido.');
+    }
+    if (tipo === 'aborto') {
+      if (!ia) errores.push('No hay una inseminación abierta para esta cerda.');
+      else if (v.fecha && v.fecha < ia) errores.push('El aborto no puede ser anterior a la inseminación.');
     }
     if (tipo === 'destete' || tipo === 'adopcion' || tipo === 'baja_lechones') {
       if (!cur || !cur.parto) errores.push('No hay un parto abierto para esta cerda.');

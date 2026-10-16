@@ -27,6 +27,7 @@
   const nombreGranja = (id) => (S.granjas.find((g) => g.id === id) || {}).nombre || `Granja ${id}`;
   const cerdaPorId = (id) => S.cerdas.find((c) => c.id === id);
   const verracoPorId = (id) => S.verracos.find((v) => v.id === id);
+  const nombreVerraco = (d) => { const v = verracoPorId(d && d.verraco); return v ? v.crotal : (d && d.verraco_crotal) || 'no anotado'; };
   const faseNombre = (id) => (L.FASES.find((f) => f.id === id) || {}).nombre || id;
 
   function toast(msg) {
@@ -241,9 +242,9 @@
   const ACCIONES = {
     vacia: ['ia', 'traslado', 'nota'],
     destetada: ['ia', 'traslado', 'nota'],
-    inseminada: ['eco', 'ia', 'traslado', 'nota'],
-    gestante: ['paridera', 'eco', 'parto', 'traslado', 'nota'],
-    paridera: ['parto', 'traslado', 'nota'],
+    inseminada: ['eco', 'ia', 'aborto', 'traslado', 'nota'],
+    gestante: ['paridera', 'eco', 'parto', 'aborto', 'traslado', 'nota'],
+    paridera: ['parto', 'aborto', 'traslado', 'nota'],
     lactante: ['destete', 'adopcion', 'baja_lechones', 'nota'],
   };
 
@@ -256,14 +257,15 @@
     const d = e.datos || {};
     const T = TIPOS[e.tipo];
     switch (e.tipo) {
-      case 'ia': { const v = verracoPorId(d.verraco); return `Verraco ${esc(v ? v.crotal : '?')}`; }
+      case 'ia': return `Verraco ${esc(nombreVerraco(d))}`;
       case 'eco': return `Resultado: ${esc(d.resultado)}`;
       case 'paridera': return `Sala ${esc(d.sala)} · paridera ${esc(d.plaza)}`;
-      case 'parto': return `Vivos ${(+d.vivos_h || 0) + (+d.vivos_m || 0)} (${+d.vivos_h || 0} H, ${+d.vivos_m || 0} M) · muertos ${(+d.muertos_h || 0) + (+d.muertos_m || 0)} · momias ${+d.momificados || 0}`;
+      case 'parto': { const ss = d.vivos_ss !== undefined; return `Vivos ${(+d.vivos_h || 0) + (+d.vivos_m || 0) + (+d.vivos_ss || 0)}${ss ? '' : ` (${+d.vivos_h || 0} H, ${+d.vivos_m || 0} M)`} · muertos ${(+d.muertos_h || 0) + (+d.muertos_m || 0) + (+d.muertos_ss || 0)}${ss ? '' : ` · momias ${+d.momificados || 0}`}`; }
       case 'adopcion': return `${d.sentido === 'entra' ? 'Recibe' : 'Cede'} ${esc(d.numero)} lechones ${d.sentido === 'entra' ? 'de' : 'a'} ${esc(d.otra_crotal || '?')}`;
       case 'baja_lechones': return `${esc(d.numero)} lechones · ${esc(d.causa)}`;
-      case 'destete': return `Destetados ${(+d.destetados_h || 0) + (+d.destetados_m || 0)} (${+d.destetados_h || 0} H, ${+d.destetados_m || 0} M) · lechonera ${esc(d.lechonera)}`;
+      case 'destete': return d.destetados_ss !== undefined ? `Destetados ${+d.destetados_ss || 0}` : `Destetados ${(+d.destetados_h || 0) + (+d.destetados_m || 0)} (${+d.destetados_h || 0} H, ${+d.destetados_m || 0} M) · lechonera ${esc(d.lechonera)}`;
       case 'traslado': return esc(d.ubicacion || '');
+      case 'aborto': return 'Fin de la gestación sin parto';
       case 'nota': return esc(d.texto || '');
       default: return T ? T.nombre : e.tipo;
     }
@@ -279,7 +281,9 @@
     const idx = L.FASES.findIndex((x) => x.id === est.fase);
 
     let fechas = '';
-    if (est.fase === 'inseminada' && f.ia) fechas = datoPar('Ecografía', corta(f.ecoIdeal), `Desde el día 19 (${corta(f.ecoDesde)})`, true, 'Parto probable', corta(f.parto), 'IA + 114 días');
+    const sinEco = est.fase === 'inseminada' && f.ia && cur.ecos.length === 0 && L.dias(f.ia, h) >= L.REF.sinEcoDias;
+    if (sinEco) fechas = `<div class="aviso-caja"><strong>Sin ecografía registrada</strong> · día ${L.dias(f.ia, h)} tras la IA. Registra la ecografía o, si ha repetido, una nueva inseminación.</div>` + datoPar('Entrada en paridera', corta(f.paridera), 'IA + 99 días', true, 'Parto probable', corta(f.parto), 'IA + 114 días');
+    else if (est.fase === 'inseminada' && f.ia) fechas = datoPar('Ecografía', corta(f.ecoIdeal), `Desde el día 19 (${corta(f.ecoDesde)})`, true, 'Parto probable', corta(f.parto), 'IA + 114 días');
     else if (est.fase === 'gestante' && f.ia) fechas = datoPar('Entrada en paridera', corta(f.paridera), 'IA + 99 días', true, 'Parto probable', corta(f.parto), 'IA + 114 días');
     else if (est.fase === 'paridera' && f.ia) fechas = datoPar('Parto probable', corta(f.parto), (() => { const x = L.dias(h, f.parto); return x > 1 ? `Faltan ${x} días` : x === 1 ? 'Mañana' : x === 0 ? 'Hoy' : `Pasado ${-x} ${x === -1 ? 'día' : 'días'}`; })(), true, 'Ubicación', esc(est.ubicacion || '—').replace('Partos · ', ''), '');
     else if (est.fase === 'lactante' && cur && cur.parto) {
@@ -294,24 +298,27 @@
     const [principal, ...resto] = acciones;
 
     const eventos = (S.porCerda[id] || []).slice().reverse();
-    const historial = eventos.map((e) => `
+    const tarjetaEvento = (e) => `
       <div class="evento"><div class="entre"><strong>${esc(TIPOS[e.tipo] ? TIPOS[e.tipo].nombre : e.tipo)}</strong><span class="suave">${fmt(e.fecha)}</span></div>
         <div>${resumenEvento(e)}</div>
         ${e.datos && e.datos.obs ? `<div class="suave">${esc(e.datos.obs)}</div>` : ''}
-        <div class="suave peq">Por ${esc(e.autor_alias || '?')}${e.modificado ? ` · corregido por ${esc(e.modificado_por || '?')}` : ''}</div>
+        <div class="suave peq">${e.datos && e.datos.origen === 'historico' ? 'Importado de las fichas anteriores' : `Por ${esc(e.autor_alias || '?')}`}${e.modificado ? ` · corregido por ${esc(e.modificado_por || '?')}` : ''}</div>
         ${puedeEditar(e) ? `<div class="acciones">${e.tipo !== 'adopcion' ? `<a class="btn sec peq" href="#/registrar/${id}/${e.tipo}/${e.id}">Corregir</a>` : ''}
           <button class="btn peligro peq" type="button" data-borrar="${e.id}">Borrar</button></div>` : ''}
-      </div>`).join('');
+      </div>`;
+    const historial = eventos.slice(0, 8).map(tarjetaEvento).join('') + (eventos.length > 8
+      ? `<details><summary class="suave" style="min-height:44px;display:flex;align-items:center">Ver ${eventos.length - 8} registros anteriores</summary>${eventos.slice(8).map(tarjetaEvento).join('')}</details>` : '');
 
     const conParto = est.ciclos.filter((x) => x.parto).reverse();
     const partos = conParto.map((x) => {
       const cm = L.camada(x); const ix = L.indicesCiclo(x);
       const dest = cm.destetados;
-      return `<tr><td><strong>${x.numParto}.º</strong></td><td>${corta(x.parto.fecha)}</td><td>${cm.vivos} / ${cm.muertos} / ${cm.momias}</td>
+      return `<tr><td><strong>${x.numParto}.º</strong></td><td>${x.parto.fecha.slice(8)}/${x.parto.fecha.slice(5, 7)}/${x.parto.fecha.slice(2, 4)}</td><td>${cm.vivos} / ${cm.muertos} / ${cm.momias}</td>
         <td>${dest === null ? '—' : `<span class="chip ${dest < L.REF.destetadosMin || dest > L.REF.destetadosMax ? 'nar' : ''}">${dest}</span>`}</td>
         <td>${ix.gestacion ?? '—'}</td><td>${ix.lactacion ?? '—'}</td></tr>`;
     }).join('');
     const repeticiones = est.ciclos.filter((x) => x.cierre === 'repeticion' || x.cierre === 'eco_negativa').length;
+    const abortos = est.ciclos.filter((x) => x.cierre === 'aborto').length;
 
     pintar(`${cabecera({ volver: '#/cerdas', textoVolver: 'Cerdas', titulo: c.crotal, sub: `${esc(c.raza)} · ${est.partos} ${est.partos === 1 ? 'parto' : 'partos'} · <strong>${faseNombre(est.fase)}${est.ubicacion ? ` · ${esc(est.ubicacion)}` : ''}</strong>` })}
       <main class="cuerpo">
@@ -322,13 +329,13 @@
         <a class="btn" href="#/registrar/${id}/${principal}">${ICONOS.mas}${esc(TIPOS[principal].nombre)}</a>
         <div class="botones">${resto.map((t) => `<a class="btn sec peq" href="#/registrar/${id}/${t}">${esc(TIPOS[t].nombre)}</a>`).join('')}</div>
         ${cur && cur.ia ? `<section class="tarjeta"><h2>Ciclo actual</h2><div class="filas">
-          <div><span>Inseminación</span><span>${fmt(cur.ia.fecha)} · ${esc((verracoPorId(cur.ia.datos.verraco) || {}).crotal || '?')} · ${esc(cur.ia.autor_alias || '')}</span></div>
+          <div><span>Inseminación</span><span>${fmt(cur.ia.fecha)} · ${esc(nombreVerraco(cur.ia.datos))}</span></div>
           ${cur.ecos.map((e) => `<div><span>Ecografía</span><span>${fmt(e.fecha)} · ${esc(e.datos.resultado)}</span></div>`).join('')}
           ${cur.paridera ? `<div><span>Entrada en paridera</span><span>${fmt(cur.paridera.fecha)}</span></div>` : ''}
           ${cur.parto ? `<div><span>Parto</span><span>${fmt(cur.parto.fecha)}</span></div>` : ''}</div></section>` : ''}
         <section class="tarjeta"><h2>Partos</h2>
           ${partos ? `<table class="tabla"><thead><tr><th>N.º</th><th>Fecha</th><th>Vivos / muertos / momias</th><th>Destet.</th><th>Gest.</th><th>Lact.</th></tr></thead><tbody>${partos}</tbody></table>
-            <div class="suave peq">Referencia: ${L.REF.destetadosMin}–${L.REF.destetadosMax} destetados por camada · gestación ${L.REF.gestacion} d · lactación ${L.REF.lactacion} d${repeticiones ? ` · ${repeticiones} ${repeticiones === 1 ? 'repetición' : 'repeticiones'}` : ''}</div>`
+            <div class="suave peq">Referencia: ${L.REF.destetadosMin}–${L.REF.destetadosMax} destetados por camada · gestación ${L.REF.gestacion} d · lactación ${L.REF.lactacion} d${repeticiones ? ` · ${repeticiones} ${repeticiones === 1 ? 'repetición' : 'repeticiones'}` : ''}${abortos ? ` · ${abortos} ${abortos === 1 ? 'aborto' : 'abortos'}` : ''}</div>`
             : '<div class="suave">Sin partos registrados en esta granja.</div>'}</section>
         <section class="tarjeta"><h2>Historial</h2>${historial || '<div class="suave">Sin eventos registrados.</div>'}</section>
         <section class="tarjeta"><h2>Datos fijos</h2><div class="filas">
@@ -432,6 +439,12 @@
         { n: 'parque_g', t: 'select', l: 'Parque', op: rango(1, 4), si: (v) => v.zona === 'Gestación' },
         F.obs],
       ubicacion: (v) => (v.zona === 'Vacías' ? `Vacías · parque ${v.parque}` : v.zona === 'Gestación' ? `Gestación · parque ${v.parque_g}` : 'Implantación'),
+    },
+    aborto: {
+      nombre: 'Aborto',
+      ayuda: 'Cierra la gestación sin parto. La cerda vuelve a vacías hasta detectar celo.',
+      campos: [F.fecha, { n: 'parque_v', t: 'select', l: 'Pasa al parque de vacías', op: rango(1, 2) }, F.obs],
+      ubicacion: (v) => `Vacías · parque ${v.parque_v}`,
     },
     nota: { nombre: 'Nota', campos: [F.fecha, { n: 'texto', t: 'textarea', l: 'Nota' }], ubicacion: () => null },
   };

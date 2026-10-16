@@ -18,6 +18,7 @@ App web instalable para gestionar la explotación porcina de ciclo cerrado (chat
 | `sw.js`, `manifest.webmanifest` | Instalación en el móvil |
 | `sql/01_esquema.sql` | Tablas y reglas de acceso (ejecutar una vez) |
 | `sql/02_profesor.sql` | Dar rol de profesor a una cuenta |
+| `sql/03_importar_historial.sql` | Historial de 14 cerdas importado de las fichas anteriores (repetible) |
 | `.github/workflows/mantener-activa.yml` | Evita que Supabase pause el proyecto en vacaciones |
 
 ## Valores de referencia
