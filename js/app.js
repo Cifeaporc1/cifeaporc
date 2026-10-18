@@ -10,7 +10,7 @@
   const S = {
     sesion: null, perfil: null, granja: null, granjas: [],
     cerdas: [], verracos: [], eventos: [], porCerda: {}, cargado: null,
-    perfiles: null, borrador: {}, nombres: {},
+    perfiles: null, borrador: {}, nombres: {}, ultimaCopia: (() => { try { const x = localStorage.getItem('cife-ultima-copia'); return x ? new Date(x) : null; } catch (_) { return null; } })(),
   };
   const $app = document.getElementById('app');
 
@@ -216,6 +216,7 @@
         <div class="foto logo"><img src="img/logo.jpg" alt="Logotipo CIFEAPORC, chato murciano"></div>
         <div class="entre"><h1 style="font-size:22px">Hoy, ${DIAS_SEM[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]}</h1>
           <span class="suave">${lista.length} ${lista.length === 1 ? 'aviso' : 'avisos'}</span></div>
+        ${esProf() && (!S.ultimaCopia || Date.now() - S.ultimaCopia > 30 * 864e5) ? `<a class="tarjeta enlace" href="#/admin/granja" style="border-color:var(--naranja-borde)"><div class="entre"><strong>Haz una copia de seguridad</strong><span class="chip nar">Profesor</span></div><div class="suave">${S.ultimaCopia ? `La última es del ${fechaHora(S.ultimaCopia)}` : 'Aún no has descargado ninguna desde este dispositivo'} · Gestión → Granja</div></a>` : ''}
         ${tarjetas || '<div class="vacio">No hay avisos para hoy.</div>'}
         <div class="tarjeta"><h2>Cerdas por fase</h2>
           <div class="opciones">${L.FASES.map((f) => `<span class="chip ${recuento[f.id] ? '' : 'gris'}">${f.nombre}: ${recuento[f.id] || 0}</span>`).join('')}</div>
@@ -849,16 +850,91 @@
         <div style="margin-top:10px"><button class="btn peligro peq" type="button" data-accion="fin-curso">Cerrar el curso</button></div></section>`;
   }
 
+  // ---------------------------------------------------------------- copia de seguridad
+  async function leerTodo() {
+    const tablas = {};
+    for (const [t, orden] of [['granjas', 'id'], ['cerdas', 'crotal'], ['verracos', 'crotal'], ['perfiles', 'alias']]) {
+      const { data, error } = await sb.from(t).select('*').order(orden);
+      if (error) throw error;
+      tablas[t] = data;
+    }
+    // Eventos de las dos granjas, por páginas de 1000
+    tablas.eventos = [];
+    for (let desde = 0; ; desde += 1000) {
+      const { data, error } = await sb.from('eventos').select('*').order('granja_id').order('fecha').order('creado').range(desde, desde + 999);
+      if (error) throw error;
+      tablas.eventos.push(...data);
+      if (data.length < 1000) break;
+    }
+    return tablas;
+  }
+  const cargarScript = (src) => new Promise((ok, mal) => { const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = () => mal(new Error('No se pudo cargar el generador de Excel. Revisa la conexión.')); document.head.appendChild(sc); });
+  function descargar(nombre, contenido, tipo) {
+    const url = URL.createObjectURL(contenido instanceof Blob ? contenido : new Blob([contenido], { type: tipo }));
+    const a = document.createElement('a'); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+  async function descargarCopia(formato, boton) {
+    const estado = document.getElementById('estado-copia');
+    boton.disabled = true; estado.innerHTML = '<div class="ok-caja">Preparando la copia…</div>';
+    try {
+      const T = await leerTodo();
+      const sello = new Date(); const fichero = `CIFEAPORC_copia_${sello.getFullYear()}-${dos(sello.getMonth() + 1)}-${dos(sello.getDate())}_${dos(sello.getHours())}${dos(sello.getMinutes())}`;
+      // Nunca se exportan contraseñas ni PIN (no están en estas tablas).
+      const perfiles = T.perfiles.map(({ user_id, alias, nombre, rol, granja_id, activo, creado }) => ({ user_id, alias, nombre: nombre ?? null, rol, granja_id, activo, creado }));
+      if (formato === 'json') {
+        const copia = { app: 'CIFEAPORC', version: C.version, fecha: sello.toISOString(), granjas: T.granjas, cerdas: T.cerdas, verracos: T.verracos, perfiles, eventos: T.eventos };
+        descargar(`${fichero}.json`, JSON.stringify(copia, null, 1), 'application/json');
+      } else {
+        if (!window.XLSX) await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+        const crotalDe = Object.fromEntries(T.cerdas.map((c) => [c.id, c.crotal]));
+        const aliasDe = Object.fromEntries(perfiles.map((p) => [p.user_id, p.nombre ? `${p.nombre} (${p.alias})` : p.alias]));
+        const verracoDe = Object.fromEntries(T.verracos.map((v) => [v.id, v.crotal]));
+        const fila = (e) => {
+          const d = e.datos || {};
+          const resumen = e.tipo === 'ia' ? `Verraco ${verracoDe[d.verraco] || d.verraco_crotal || 'no anotado'}` : resumenTexto(e);
+          return { Granja: e.granja_id === 1 ? '1.º' : '2.º', Cerda: crotalDe[e.cerda_id] || '?', Fecha: e.fecha, Evento: TIPOS[e.tipo] ? TIPOS[e.tipo].nombre : e.tipo, Detalle: resumen, Ubicación: d.ubicacion || '', Observaciones: d.obs || d.texto || '', 'Registrado por': d.origen === 'historico' ? 'Fichas anteriores' : (aliasDe[e.autor] || e.autor_alias || ''), 'Registrado el': e.creado ? e.creado.slice(0, 16).replace('T', ' ') : '', 'Corregido por': e.modificado_por || '', 'Datos completos': JSON.stringify(d) };
+        };
+        const X = window.XLSX; const libro = X.utils.book_new();
+        const hoja = (nombre, filas) => { const h = X.utils.json_to_sheet(filas.length ? filas : [{ '': 'Sin datos' }]); X.utils.book_append_sheet(libro, h, nombre); };
+        hoja('Cerdas', T.cerdas.map((c) => ({ Crotal: c.crotal, 'Otros crotales': (c.otros_crotales || []).join(', '), Raza: c.raza, Nacimiento: c.fecha_nacimiento || '', Entrada: c.fecha_entrada || '', Procedencia: c.origen || '', 'Fecha de baja': c.fecha_baja || '', 'Causa de baja': c.causa_baja || '' })));
+        hoja('Verracos', T.verracos.map((v) => ({ Crotal: v.crotal, Raza: v.raza, Nacimiento: v.fecha_nacimiento || '', Entrada: v.fecha_entrada || '', Verraquera: v.verraquera || '', 'Fecha de baja': v.fecha_baja || '', 'Causa de baja': v.causa_baja || '' })));
+        hoja('Eventos 1.º', T.eventos.filter((e) => e.granja_id === 1).map(fila));
+        hoja('Eventos 2.º', T.eventos.filter((e) => e.granja_id === 2).map(fila));
+        hoja('Alumnos', perfiles.map((p) => ({ Alias: p.alias, Nombre: p.nombre || '', Rol: p.rol, Granja: p.granja_id ? (p.granja_id === 1 ? '1.º' : '2.º') : 'Las dos', Activo: p.activo ? 'Sí' : 'No' })));
+        hoja('Información', [{ App: 'CIFEAPORC', Versión: C.version, 'Copia del': fechaHora(sello), Cerdas: T.cerdas.length, Verracos: T.verracos.length, Eventos: T.eventos.length, Nota: 'Las contraseñas y los PIN no se exportan.' }]);
+        X.writeFile(libro, `${fichero}.xlsx`);
+      }
+      S.ultimaCopia = sello;
+      try { localStorage.setItem('cife-ultima-copia', sello.toISOString()); } catch (_) { /* sin almacenamiento */ }
+      estado.innerHTML = `<div class="ok-caja" role="status">Copia descargada: ${T.cerdas.length} cerdas, ${T.verracos.length} verracos y ${T.eventos.length} eventos. Búscala en la carpeta de Descargas.</div>`;
+    } catch (e) {
+      estado.innerHTML = `<div class="error-caja" role="alert">${esc(traducirError(e))}</div>`;
+    }
+    boton.disabled = false;
+  }
+  // Resumen de un evento en texto plano (para el Excel)
+  function resumenTexto(e) {
+    const div = document.createElement('div'); div.innerHTML = resumenEvento(e); return div.textContent;
+  }
+
   function adminGranja() {
     return `<section class="tarjeta"><h2>Granja que estás viendo</h2>
       <div class="suave">Como profesor puedes ver y registrar en las dos granjas. Elige cuál mostrar.</div>
       <div class="pestanas">${S.granjas.map((g) => `<button type="button" data-granja="${g.id}" class="${S.granja === g.id ? 'activo' : ''}" aria-pressed="${S.granja === g.id}">${esc(g.nombre.replace('Granja ', ''))}</button>`).join('')}</div></section>
+      <section class="tarjeta"><h2>Copia de seguridad</h2>
+        <div class="suave">Descarga todos los datos de las dos granjas: censo, historial completo y alumnos (sin PIN). Guárdala en tu ordenador o en OneDrive. Recomendado: al final de cada mes y de cada trimestre.</div>
+        ${S.ultimaCopia ? `<div class="ok-caja">Última copia descargada: ${fechaHora(S.ultimaCopia)}</div>` : ''}
+        <div class="botones"><button class="btn" type="button" data-accion="copia-excel">Descargar Excel</button><button class="btn sec" type="button" data-accion="copia-json">Archivo para restaurar</button></div>
+        <div class="suave peq">El Excel sirve para consultar y trabajar con los datos. El «archivo para restaurar» (.json) contiene lo mismo en un formato que permite volver a cargarlo si algún día se pierde la base de datos.</div>
+        <div id="estado-copia" aria-live="polite"></div></section>
       <div class="foto"><img src="img/granja.jpg" alt="Vista aérea de la granja porcina"></div>
       <div class="vacio">El plano de la granja, los lotes, la sanidad y la comparación entre granjas llegan en las siguientes fases.</div>`;
   }
 
   function enlazarAdmin(seccion) {
     if (seccion === 'granja') {
+      $app.querySelectorAll('[data-accion="copia-excel"], [data-accion="copia-json"]').forEach((b) => b.addEventListener('click', () => descargarCopia(b.dataset.accion === 'copia-excel' ? 'xlsx' : 'json', b)));
       $app.querySelectorAll('[data-granja]').forEach((b) => b.addEventListener('click', async () => {
         S.granja = Number(b.dataset.granja);
         try { localStorage.setItem('cife-granja', String(S.granja)); } catch (_) { /* sin almacenamiento */ }

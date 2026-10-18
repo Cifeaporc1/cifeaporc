@@ -6,5 +6,5 @@ window.CONFIG = {
   supabaseKey: 'sb_publishable_oX5DsKI3WIhqkY-j6EDgKg_jJ84vVwh',
   // Dominio ficticio para las cuentas de alumno (alias + granja). No se envía ningún correo.
   dominioAlumnos: 'alumnos.cifeaporc.app',
-  version: '0.3.2',
+  version: '0.3.3',
 };

@@ -22,6 +22,10 @@ App web instalable para gestionar la explotación porcina de ciclo cerrado (chat
 | `sql/04_nombres_alumnos.sql` | Nombre opcional de los alumnos, visible solo en su curso; se borra al cerrar el curso |
 | `.github/workflows/mantener-activa.yml` | Evita que Supabase pause el proyecto en vacaciones |
 
+## Copia de seguridad
+
+El plan gratuito de Supabase no hace copias automáticas. En la app, **Gestión → Granja → Copia de seguridad** descarga un Excel (para consultar) y un `.json` (para restaurar). Recomendado: cada mes y cada trimestre.
+
 ## Valores de referencia
 
 Están en `js/logica.js` (`REF`): ecografía desde el día 19 (ideal 21), entrada en paridera IA + 99, parto IA + 114, lactación 30 días, intervalo destete-cubrición 4–6 días, 7–9 destetados por camada, dosis con aviso el día 4 y caducadas tras el día 5 (extracción = día 0).
