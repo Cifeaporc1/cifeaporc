@@ -751,16 +751,86 @@
     });
   }
 
+  const pinAzar = () => String(Math.floor(100000 + Math.random() * 900000));
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Crea la cuenta de un alumno (alias + PIN) y su perfil. Devuelve null si va bien o el texto del error.
+  async function crearAcceso(alias, pin, granja, nombre) {
+    // Cliente aparte para no cerrar la sesión del profesor.
+    const sb2 = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'cife-alta' } });
+    const { data, error } = await sb2.auth.signUp({ email: `${alias.toLowerCase()}.g${granja}@${C.dominioAlumnos}`, password: pin });
+    if (error) return traducirError(error);
+    if (!data.user || (data.user.identities && data.user.identities.length === 0)) return 'Ese alias ya existe en esa granja.';
+    const r = await sb.from('perfiles').insert({ user_id: data.user.id, alias, rol: 'alumno', granja_id: granja, ...(nombre ? { nombre } : {}) });
+    return r.error ? traducirError(r.error) : null;
+  }
+  // "LÓPEZ GARCÍA, JUAN" o "Juan López García" → "Juan L." (se puede corregir antes de crear)
+  const capital = (t) => t.toLocaleLowerCase('es').replace(/(^|[\s-])(\p{L})/gu, (m, a, b) => a + b.toLocaleUpperCase('es'));
+  function acortarNombre(linea, acortar) {
+    const t = linea.replace(/\t+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t) return '';
+    let nombre, apellido;
+    if (t.includes(',')) { const [a, n] = t.split(','); apellido = a.trim(); nombre = (n || '').trim(); }
+    else {
+      // Desde el final: hasta dos apellidos, cada uno con sus partículas (de, del, la…).
+      const w = t.split(' '); if (w.length === 1) return capital(w[0]);
+      const part = /^(de|del|la|las|los|y|san)$/i; let i = w.length; const grupos = [];
+      while (grupos.length < 2 && i > 1) { let j = i - 1; while (j > 1 && part.test(w[j - 1])) j -= 1; grupos.unshift(w.slice(j, i).join(' ')); i = j; }
+      nombre = w.slice(0, i).join(' '); apellido = grupos.join(' ');
+    }
+    if (!nombre) return capital(apellido).slice(0, 40);
+    const minus = (x) => x.replace(/ (De|Del|La|Las|Los|Y|San) /g, (m) => m.toLocaleLowerCase('es'));
+    if (!acortar) return minus(capital(`${nombre} ${apellido}`)).slice(0, 40);
+    const ini = (apellido.split(' ').find((x) => !/^(de|del|la|las|los|y)$/i.test(x)) || '')[0];
+    return `${capital(nombre)}${ini ? ` ${ini.toLocaleUpperCase('es')}.` : ''}`.slice(0, 40);
+  }
+  function siguienteAlias(prefijo, granja, usados) {
+    let maxN = 0;
+    for (const a of usados) { const m = a.match(new RegExp(`^${prefijo}(\\d+)$`)); if (m) maxN = Math.max(maxN, Number(m[1])); }
+    return () => { maxN += 1; return `${prefijo}${String(maxN).padStart(2, '0')}`; };
+  }
+
+  function bloqueVarios() {
+    const L = S.borrador.lote;
+    if (S.borrador.resultado) {
+      const R = S.borrador.resultado;
+      const filas = R.map((r) => `<tr><td>${esc(r.nombre || '—')}</td><td><strong>${esc(r.alias)}</strong></td><td>${r.error ? `<span class="chip rojo">${esc(r.error)}</span>` : `<strong>${esc(r.pin)}</strong>`}</td></tr>`).join('');
+      return `<section class="tarjeta"><h2>Accesos creados (${R.filter((r) => !r.error).length} de ${R.length})</h2>
+        <div class="aviso-caja"><strong>Copia o imprime esta lista ahora:</strong> los PIN no se vuelven a mostrar. Entrégale a cada alumno su alias y su PIN.</div>
+        <table class="tabla"><thead><tr><th>Nombre</th><th>Alias</th><th>PIN</th></tr></thead><tbody>${filas}</tbody></table>
+        <div class="botones"><button class="btn sec peq" type="button" data-accion="copiar-lista">Copiar lista</button><button class="btn sec peq" type="button" data-accion="imprimir">Imprimir</button><button class="btn peq" type="button" data-accion="cerrar-lista">Hecho</button></div></section>`;
+    }
+    if (L) {
+      return `<form class="formu tarjeta" id="f-lote" novalidate><h2>Revisa la lista · ${esc(nombreGranja(L.granja))}</h2>
+        <div class="suave peq">Corrige los nombres o los alias si hace falta. Al pulsar Crear se generan los accesos uno a uno (tarda unos segundos por alumno).</div>
+        <table class="tabla"><thead><tr><th>Nombre</th><th>Alias</th></tr></thead><tbody>${L.filas.map((f, i) => `<tr>
+          <td><input type="text" name="n${i}" aria-label="Nombre ${i + 1}" maxlength="40" value="${esc(f.nombre)}"></td>
+          <td style="width:96px"><input type="text" name="a${i}" aria-label="Alias ${i + 1}" maxlength="10" value="${esc(f.alias)}"></td></tr>`).join('')}</tbody></table>
+        <div id="progreso" aria-live="polite"></div>
+        <div class="botones"><button class="btn sec" type="button" data-accion="cancelar-lote">Cancelar</button><button class="btn" type="submit">Crear ${L.filas.length} accesos</button></div></form>`;
+    }
+    return `<details class="tarjeta"><summary style="min-height:44px;display:flex;align-items:center;font-weight:700">Añadir varios alumnos a la vez</summary>
+      <form class="formu" id="f-varios" novalidate style="margin-top:10px">
+        <div class="campo"><span class="et" id="et-gv">Granja</span><div class="opciones" role="radiogroup" aria-labelledby="et-gv">
+          <label><input type="radio" name="granja" value="1" checked> 1.º curso</label><label><input type="radio" name="granja" value="2"> 2.º curso</label></div></div>
+        <div class="campo"><label for="v-lista">Pega la lista (un alumno por línea)</label>
+          <textarea id="v-lista" name="lista" rows="8" placeholder="LÓPEZ GARCÍA, JUAN\nMartínez Ruiz, Eva\nAna Pérez Sánchez"></textarea>
+          <span class="ayuda">Vale copiar la columna de nombres de un Excel o de la lista de clase.</span></div>
+        <div class="opciones"><label><input type="checkbox" name="acortar" checked> Guardar solo nombre e inicial del apellido (recomendado)</label></div>
+        <div class="campo"><label for="v-pref">Letra de los alias</label><input id="v-pref" name="prefijo" type="text" maxlength="2" autocapitalize="characters" placeholder="A para 1.º, B para 2.º"></div>
+        <button class="btn" type="submit">Revisar lista</button></form></details>`;
+  }
+
   function adminAlumnos(msg) {
     const alumnos = S.perfiles.filter((p) => p.rol === 'alumno');
     const profes = S.perfiles.filter((p) => p.rol === 'profesor');
-    const pin = String(Math.floor(100000 + Math.random() * 900000));
+    const pin = pinAzar();
     const porGranja = (g) => alumnos.filter((a) => a.granja_id === g).map((a) => `
       <div class="evento"><div class="entre"><strong>${esc(a.alias)}${a.nombre ? ` · ${esc(a.nombre)}` : ''}</strong><span class="chip ${a.activo ? '' : 'gris'}">${a.activo ? 'Activo' : 'Desactivado'}</span></div>
         ${S.borrador.editNombre === a.user_id ? `<form class="entre" data-form-nombre="${a.user_id}" novalidate style="gap:8px"><input name="nombre" type="text" aria-label="Nombre de ${esc(a.alias)}" maxlength="40" value="${esc(a.nombre || '')}" placeholder="Nombre e inicial (Juan G.)"><button class="btn peq" type="submit">Guardar</button></form>` : ''}
         <div class="acciones"><button class="btn sec peq" type="button" data-nombre="${a.user_id}">${a.nombre ? 'Cambiar nombre' : 'Poner nombre'}</button>
         <button class="btn sec peq" type="button" data-pin="${a.user_id}" data-alias="${esc(a.alias)}">Nuevo PIN</button>
         <button class="btn sec peq" type="button" data-activo="${a.user_id}" data-valor="${a.activo ? '0' : '1'}">${a.activo ? 'Desactivar' : 'Activar'}</button></div></div>`).join('') || '<div class="suave">Sin alumnos.</div>';
+    if (S.borrador.resultado) return `${msg || ''}${bloqueVarios()}`;
     return `${msg || ''}
       <form class="formu tarjeta" id="f-alumno" novalidate><h2>Añadir alumno</h2>
         <div class="campo"><span class="et" id="et-ga">Granja</span><div class="opciones" role="radiogroup" aria-labelledby="et-ga">
@@ -770,6 +840,7 @@
         <div class="campo"><label for="al-nombre">Nombre <span class="suave">(opcional: nombre e inicial del apellido)</span></label><input id="al-nombre" name="nombre" type="text" maxlength="40" placeholder="Juan G."></div>
         <div class="suave peq">El nombre solo lo ven los compañeros de su curso y el profesor. Se borra al cerrar el curso. Para entrar se usa siempre el alias y el PIN.</div>
         <button class="btn" type="submit">Crear acceso</button></form>
+      ${bloqueVarios()}
       <section class="tarjeta"><h2>Alumnos · 1.º curso</h2>${porGranja(1)}</section>
       <section class="tarjeta"><h2>Alumnos · 2.º curso</h2>${porGranja(2)}</section>
       <section class="tarjeta"><h2>Profesores</h2>${profes.map((p) => `<div>${esc(p.alias)}</div>`).join('')}
@@ -796,7 +867,7 @@
     }
     if (seccion !== 'alumnos' || !S.perfiles) return;
     const fa = document.getElementById('f-alumno');
-    fa.addEventListener('submit', async (ev) => {
+    if (fa) fa.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const f = Object.fromEntries(new FormData(fa).entries());
       const alias = String(f.alias || '').trim().toUpperCase();
@@ -807,18 +878,66 @@
       if (!/^[A-Z0-9]{1,10}$/.test(alias)) return err('El alias solo puede tener letras y números (máximo 10), sin espacios.');
       if (!/^\d{6}$/.test(pin)) return err('El PIN debe tener 6 cifras.');
       if (S.perfiles.some((p) => p.alias.toUpperCase() === alias && p.granja_id === granja)) return err('Ese alias ya existe en esa granja.');
-      // Cliente aparte para no cerrar la sesión del profesor.
-      const sb2 = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'cife-alta' } });
-      const { data, error } = await sb2.auth.signUp({ email: `${alias.toLowerCase()}.g${granja}@${C.dominioAlumnos}`, password: pin });
-      if (error) return err(traducirError(error));
-      if (!data.user || (data.user.identities && data.user.identities.length === 0)) return err('Ese alias ya existe en esa granja.');
-      const r = await sb.from('perfiles').insert({ user_id: data.user.id, alias, rol: 'alumno', granja_id: granja, ...(nombre ? { nombre } : {}) });
-      if (r.error) return err(traducirError(r.error));
+      const fallo = await crearAcceso(alias, pin, granja, nombre);
+      if (fallo) return err(fallo);
       await cargarPerfiles();
       vistaAdmin('alumnos', `<div class="ok-caja" role="status"><strong>Acceso creado.</strong><br>${esc(nombreGranja(granja))} · alias <strong>${esc(alias)}</strong>${nombre ? ` (${esc(nombre)})` : ''} · PIN <strong>${esc(pin)}</strong><br>Apúntalo ahora: el PIN no se vuelve a mostrar.</div>`);
     });
+    const fv = document.getElementById('f-varios');
+    if (fv) fv.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const f = new FormData(fv);
+      const granja = Number(f.get('granja'));
+      const acortar = f.get('acortar') === 'on';
+      const prefijo = (String(f.get('prefijo') || '').trim().toUpperCase().replace(/[^A-Z]/g, '') || (granja === 1 ? 'A' : 'B')).slice(0, 2);
+      const nombres = String(f.get('lista') || '').split(/\r?\n/).map((l) => acortarNombre(l, acortar)).filter(Boolean);
+      if (!nombres.length) return vistaAdmin('alumnos', '<div class="error-caja" role="alert">Pega al menos un nombre.</div>');
+      if (nombres.length > 40) return vistaAdmin('alumnos', '<div class="error-caja" role="alert">Máximo 40 alumnos por lista.</div>');
+      const sig = siguienteAlias(prefijo, granja, S.perfiles.filter((p) => p.granja_id === granja).map((p) => p.alias.toUpperCase()));
+      S.borrador.lote = { granja, filas: nombres.map((nombre) => ({ nombre, alias: sig() })) };
+      vistaAdmin('alumnos');
+    });
+    const fl = document.getElementById('f-lote');
+    if (fl) fl.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const L = S.borrador.lote; const f = new FormData(fl);
+      const filas = L.filas.map((x, i) => ({ nombre: String(f.get(`n${i}`) || '').trim().replace(/\s+/g, ' ').slice(0, 40) || null, alias: String(f.get(`a${i}`) || '').trim().toUpperCase() }));
+      const usados = new Set(S.perfiles.filter((p) => p.granja_id === L.granja).map((p) => p.alias.toUpperCase()));
+      const prog = document.getElementById('progreso');
+      for (const x of filas) {
+        if (!/^[A-Z0-9]{1,10}$/.test(x.alias)) { prog.innerHTML = `<div class="error-caja" role="alert">Alias no válido: «${esc(x.alias)}». Solo letras y números, sin espacios.</div>`; return; }
+        if (usados.has(x.alias)) { prog.innerHTML = `<div class="error-caja" role="alert">El alias ${esc(x.alias)} está repetido o ya existe en esa granja.</div>`; return; }
+        usados.add(x.alias);
+      }
+      fl.querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
+      const resultado = [];
+      for (let i = 0; i < filas.length; i++) {
+        const x = filas[i]; const pin = pinAzar();
+        prog.innerHTML = `<div class="ok-caja">Creando ${i + 1} de ${filas.length}: ${esc(x.alias)}…</div>`;
+        const fallo = await crearAcceso(x.alias, pin, L.granja, x.nombre);
+        resultado.push({ ...x, pin, error: fallo });
+        if (fallo && /Demasiados|rate limit/i.test(fallo)) {
+          for (const y of filas.slice(i + 1)) resultado.push({ ...y, pin: '', error: 'No creado: espera unos minutos y vuelve a añadirlo' });
+          break;
+        }
+        await espera(1200);
+      }
+      S.borrador.lote = null; S.borrador.resultado = resultado;
+      await cargarPerfiles(); vistaAdmin('alumnos');
+    });
+    const cl = $app.querySelector('[data-accion="cancelar-lote"]');
+    if (cl) cl.addEventListener('click', () => { S.borrador.lote = null; vistaAdmin('alumnos'); });
+    const cp = $app.querySelector('[data-accion="copiar-lista"]');
+    if (cp) cp.addEventListener('click', async () => {
+      const texto = ['Nombre\tAlias\tPIN', ...S.borrador.resultado.filter((r) => !r.error).map((r) => `${r.nombre || ''}\t${r.alias}\t${r.pin}`)].join('\n');
+      try { await navigator.clipboard.writeText(texto); toast('Lista copiada: pégala en un Excel o documento'); } catch (_) { toast('No se pudo copiar. Usa Imprimir.'); }
+    });
+    const im = $app.querySelector('[data-accion="imprimir"]');
+    if (im) im.addEventListener('click', () => window.print());
+    const ce = $app.querySelector('[data-accion="cerrar-lista"]');
+    if (ce) ce.addEventListener('click', () => { S.borrador.resultado = null; vistaAdmin('alumnos'); });
     $app.querySelectorAll('[data-pin]').forEach((b) => b.addEventListener('click', async () => {
-      const pin = String(Math.floor(100000 + Math.random() * 900000));
+      const pin = pinAzar();
       const { error } = await sb.rpc('restablecer_pin', { p_user: b.dataset.pin, p_pin: pin });
       if (error) return vistaAdmin('alumnos', `<div class="error-caja" role="alert">${esc(traducirError(error))}</div>`);
       vistaAdmin('alumnos', `<div class="ok-caja" role="status">Nuevo PIN para <strong>${esc(b.dataset.alias)}</strong>: <strong>${pin}</strong>. Apúntalo ahora.</div>`);
@@ -840,7 +959,7 @@
       await cargarPerfiles(); vistaAdmin('alumnos');
     }));
     const fin = $app.querySelector('[data-accion="fin-curso"]');
-    fin.addEventListener('click', async () => {
+    if (fin) fin.addEventListener('click', async () => {
       if (fin.dataset.confirmar !== '1') { fin.dataset.confirmar = '1'; fin.textContent = '¿Seguro? Pulsa otra vez para desactivar a todos y borrar sus nombres'; return; }
       const { data, error } = await sb.rpc('cerrar_curso');
       if (error) return vistaAdmin('alumnos', `<div class="error-caja" role="alert">${esc(/cerrar_curso/.test(error.message) ? 'Falta ejecutar en Supabase el archivo 04_nombres_alumnos.sql.' : traducirError(error))}</div>`);
