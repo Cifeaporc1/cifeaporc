@@ -10,7 +10,7 @@
   const S = {
     sesion: null, perfil: null, granja: null, granjas: [],
     cerdas: [], verracos: [], eventos: [], porCerda: {}, cargado: null,
-    perfiles: null, borrador: {},
+    perfiles: null, borrador: {}, nombres: {},
   };
   const $app = document.getElementById('app');
 
@@ -28,6 +28,9 @@
   const cerdaPorId = (id) => S.cerdas.find((c) => c.id === id);
   const verracoPorId = (id) => S.verracos.find((v) => v.id === id);
   const nombreVerraco = (d) => { const v = verracoPorId(d && d.verraco); return v ? v.crotal : (d && d.verraco_crotal) || 'no anotado'; };
+  // "Juan G. (A07)" si hay nombre; si no, el alias.
+  const quienEs = (userId, alias) => { const p = S.nombres[userId]; return p && p.nombre ? `${p.nombre} (${p.alias})` : (alias || (p && p.alias) || '?'); };
+  const yo = () => (S.perfil.nombre ? `${S.perfil.nombre} (${S.perfil.alias})` : S.perfil.alias);
   const faseNombre = (id) => (L.FASES.find((f) => f.id === id) || {}).nombre || id;
 
   function toast(msg) {
@@ -40,6 +43,7 @@
     if (/Invalid login credentials/i.test(m)) return 'Alias, granja o PIN incorrectos.';
     if (/Failed to fetch|NetworkError|network/i.test(m)) return 'No hay conexión. Revisa la cobertura e inténtalo de nuevo.';
     if (/row-level security|permission denied/i.test(m)) return 'No tienes permiso para hacer esto (o han pasado más de 24 horas desde el registro).';
+    if (/nombre/i.test(m) && /column|schema cache/i.test(m)) return 'Falta ejecutar en Supabase el archivo 04_nombres_alumnos.sql.';
     if (/duplicate key/i.test(m)) return 'Ya existe un registro con ese crotal o alias.';
     if (/already registered|already been registered|User already/i.test(m)) return 'Ese alias ya existe en esa granja.';
     if (/Email not confirmed/i.test(m)) return 'La cuenta no está confirmada: en Supabase hay que desactivar "Confirm email" (ver guía).';
@@ -85,6 +89,11 @@
     S.granjas = g.data; S.cerdas = c.data; S.verracos = v.data; S.eventos = e.data;
     S.porCerda = {};
     for (const ev of S.eventos) (S.porCerda[ev.cerda_id] = S.porCerda[ev.cerda_id] || []).push(ev);
+    // Nombres visibles (los de la propia granja y los profesores). Si la función
+    // aún no existe en Supabase, la app sigue funcionando solo con alias.
+    const nv = await sb.rpc('nombres_visibles');
+    S.nombres = {};
+    if (!nv.error && Array.isArray(nv.data)) for (const p of nv.data) S.nombres[p.user_id] = p;
     S.cargado = new Date();
   }
 
@@ -105,8 +114,8 @@
   // ---------------------------------------------------------------- maquetación
   function cabecera(o = {}) {
     const quien = esProf()
-      ? `Profesor · ${esc(S.perfil.alias)} · viendo ${esc(nombreGranja(S.granja))}`
-      : `${esc(nombreGranja(S.granja))} · ${esc(S.perfil.alias)}`;
+      ? `Profesor · ${esc(yo())} · viendo ${esc(nombreGranja(S.granja))}`
+      : `${esc(nombreGranja(S.granja))} · ${esc(yo())}`;
     const horas = `<div class="horas"><span>Consulta: <span id="hora-consulta">${fechaHora(new Date())}</span></span><span>Datos actualizados: ${S.cargado ? fechaHora(S.cargado) : '—'}</span></div>`;
     if (o.volver) {
       return `<header class="cab ${o.prof ? 'prof' : ''}">
@@ -302,7 +311,7 @@
       <div class="evento"><div class="entre"><strong>${esc(TIPOS[e.tipo] ? TIPOS[e.tipo].nombre : e.tipo)}</strong><span class="suave">${fmt(e.fecha)}</span></div>
         <div>${resumenEvento(e)}</div>
         ${e.datos && e.datos.obs ? `<div class="suave">${esc(e.datos.obs)}</div>` : ''}
-        <div class="suave peq">${e.datos && e.datos.origen === 'historico' ? 'Importado de las fichas anteriores' : `Por ${esc(e.autor_alias || '?')}`}${e.modificado ? ` · corregido por ${esc(e.modificado_por || '?')}` : ''}</div>
+        <div class="suave peq">${e.datos && e.datos.origen === 'historico' ? 'Importado de las fichas anteriores' : `Por ${esc(quienEs(e.autor, e.autor_alias))}`}${e.modificado ? ` · corregido por ${esc(e.modificado_por || '?')}` : ''}</div>
         ${puedeEditar(e) ? `<div class="acciones">${e.tipo !== 'adopcion' ? `<a class="btn sec peq" href="#/registrar/${id}/${e.tipo}/${e.id}">Corregir</a>` : ''}
           <button class="btn peligro peq" type="button" data-borrar="${e.id}">Borrar</button></div>` : ''}
       </div>`;
@@ -523,7 +532,7 @@
           ${T.campos.map((x) => campoHTML(x, v, cerdaId)).join('')}
           <div id="resumen"></div>
           <div id="mensajes" aria-live="polite"></div>
-          <div class="suave peq">${eventoId ? `Registrado por ${esc(evento.autor_alias || '?')}` : `Lo registras como ${esc(S.perfil.alias)}`}${esProf() ? '' : ' · podrás corregirlo durante 24 horas'}</div>
+          <div class="suave peq">${eventoId ? `Registrado por ${esc(quienEs(evento.autor, evento.autor_alias))}` : `Lo registras como ${esc(yo())}`}${esProf() ? '' : ' · podrás corregirlo durante 24 horas'}</div>
           <button class="btn" type="submit">${eventoId ? 'Guardar corrección' : 'Guardar'}</button>
         </form>
       </main>`);
@@ -637,6 +646,7 @@
       <main class="cuerpo">
         <h1 style="font-size:22px">Tu cuenta</h1>
         <section class="tarjeta"><div class="filas">
+          ${S.perfil.nombre ? `<div><span>Nombre</span><span>${esc(S.perfil.nombre)}</span></div>` : ''}
           <div><span>Alias</span><span>${esc(S.perfil.alias)}</span></div>
           <div><span>Rol</span><span>${esProf() ? 'Profesor' : 'Alumno'}</span></div>
           <div><span>Granja</span><span>${esc(esProf() ? 'Las dos' : nombreGranja(S.granja))}</span></div></div></section>
@@ -746,8 +756,10 @@
     const profes = S.perfiles.filter((p) => p.rol === 'profesor');
     const pin = String(Math.floor(100000 + Math.random() * 900000));
     const porGranja = (g) => alumnos.filter((a) => a.granja_id === g).map((a) => `
-      <div class="evento"><div class="entre"><strong>${esc(a.alias)}</strong><span class="chip ${a.activo ? '' : 'gris'}">${a.activo ? 'Activo' : 'Desactivado'}</span></div>
-        <div class="acciones"><button class="btn sec peq" type="button" data-pin="${a.user_id}" data-alias="${esc(a.alias)}">Nuevo PIN</button>
+      <div class="evento"><div class="entre"><strong>${esc(a.alias)}${a.nombre ? ` · ${esc(a.nombre)}` : ''}</strong><span class="chip ${a.activo ? '' : 'gris'}">${a.activo ? 'Activo' : 'Desactivado'}</span></div>
+        ${S.borrador.editNombre === a.user_id ? `<form class="entre" data-form-nombre="${a.user_id}" novalidate style="gap:8px"><input name="nombre" type="text" aria-label="Nombre de ${esc(a.alias)}" maxlength="40" value="${esc(a.nombre || '')}" placeholder="Nombre e inicial (Juan G.)"><button class="btn peq" type="submit">Guardar</button></form>` : ''}
+        <div class="acciones"><button class="btn sec peq" type="button" data-nombre="${a.user_id}">${a.nombre ? 'Cambiar nombre' : 'Poner nombre'}</button>
+        <button class="btn sec peq" type="button" data-pin="${a.user_id}" data-alias="${esc(a.alias)}">Nuevo PIN</button>
         <button class="btn sec peq" type="button" data-activo="${a.user_id}" data-valor="${a.activo ? '0' : '1'}">${a.activo ? 'Desactivar' : 'Activar'}</button></div></div>`).join('') || '<div class="suave">Sin alumnos.</div>';
     return `${msg || ''}
       <form class="formu tarjeta" id="f-alumno" novalidate><h2>Añadir alumno</h2>
@@ -755,14 +767,15 @@
           <label><input type="radio" name="granja" value="1" checked> 1.º curso</label><label><input type="radio" name="granja" value="2"> 2.º curso</label></div></div>
         <div class="dos"><div class="campo"><label for="al-alias">Alias</label><input id="al-alias" name="alias" type="text" autocapitalize="characters" placeholder="A07"></div>
           <div class="campo"><label for="al-pin">PIN</label><input id="al-pin" name="pin" type="text" inputmode="numeric" maxlength="6" value="${pin}"></div></div>
-        <div class="suave peq">Apunta fuera de la app qué alumno corresponde a cada alias. La app no guarda nombres.</div>
+        <div class="campo"><label for="al-nombre">Nombre <span class="suave">(opcional: nombre e inicial del apellido)</span></label><input id="al-nombre" name="nombre" type="text" maxlength="40" placeholder="Juan G."></div>
+        <div class="suave peq">El nombre solo lo ven los compañeros de su curso y el profesor. Se borra al cerrar el curso. Para entrar se usa siempre el alias y el PIN.</div>
         <button class="btn" type="submit">Crear acceso</button></form>
       <section class="tarjeta"><h2>Alumnos · 1.º curso</h2>${porGranja(1)}</section>
       <section class="tarjeta"><h2>Alumnos · 2.º curso</h2>${porGranja(2)}</section>
       <section class="tarjeta"><h2>Profesores</h2>${profes.map((p) => `<div>${esc(p.alias)}</div>`).join('')}
         <div class="suave peq">Para añadir otro profesor, sigue la guía de puesta en marcha (paso del profesor).</div></section>
-      <section class="aviso-caja"><strong>Cambio de curso escolar</strong><br>Desactiva todos los alumnos. Sus registros se conservan. Después crea los alias del curso nuevo.
-        <div style="margin-top:10px"><button class="btn peligro peq" type="button" data-accion="fin-curso">Desactivar todos los alumnos</button></div></section>`;
+      <section class="aviso-caja"><strong>Cambio de curso escolar</strong><br>Desactiva a todos los alumnos y <strong>borra sus nombres</strong>. Sus registros se conservan con el alias. Después crea los alias del curso nuevo.
+        <div style="margin-top:10px"><button class="btn peligro peq" type="button" data-accion="fin-curso">Cerrar el curso</button></div></section>`;
   }
 
   function adminGranja() {
@@ -789,6 +802,7 @@
       const alias = String(f.alias || '').trim().toUpperCase();
       const pin = String(f.pin || '').trim();
       const granja = Number(f.granja);
+      const nombre = String(f.nombre || '').trim().replace(/\s+/g, ' ').slice(0, 40) || null;
       const err = (t) => vistaAdmin('alumnos', `<div class="error-caja" role="alert">${esc(t)}</div>`);
       if (!/^[A-Z0-9]{1,10}$/.test(alias)) return err('El alias solo puede tener letras y números (máximo 10), sin espacios.');
       if (!/^\d{6}$/.test(pin)) return err('El PIN debe tener 6 cifras.');
@@ -798,16 +812,27 @@
       const { data, error } = await sb2.auth.signUp({ email: `${alias.toLowerCase()}.g${granja}@${C.dominioAlumnos}`, password: pin });
       if (error) return err(traducirError(error));
       if (!data.user || (data.user.identities && data.user.identities.length === 0)) return err('Ese alias ya existe en esa granja.');
-      const r = await sb.from('perfiles').insert({ user_id: data.user.id, alias, rol: 'alumno', granja_id: granja });
+      const r = await sb.from('perfiles').insert({ user_id: data.user.id, alias, rol: 'alumno', granja_id: granja, ...(nombre ? { nombre } : {}) });
       if (r.error) return err(traducirError(r.error));
       await cargarPerfiles();
-      vistaAdmin('alumnos', `<div class="ok-caja" role="status"><strong>Acceso creado.</strong><br>${esc(nombreGranja(granja))} · alias <strong>${esc(alias)}</strong> · PIN <strong>${esc(pin)}</strong><br>Apúntalo ahora: el PIN no se vuelve a mostrar.</div>`);
+      vistaAdmin('alumnos', `<div class="ok-caja" role="status"><strong>Acceso creado.</strong><br>${esc(nombreGranja(granja))} · alias <strong>${esc(alias)}</strong>${nombre ? ` (${esc(nombre)})` : ''} · PIN <strong>${esc(pin)}</strong><br>Apúntalo ahora: el PIN no se vuelve a mostrar.</div>`);
     });
     $app.querySelectorAll('[data-pin]').forEach((b) => b.addEventListener('click', async () => {
       const pin = String(Math.floor(100000 + Math.random() * 900000));
       const { error } = await sb.rpc('restablecer_pin', { p_user: b.dataset.pin, p_pin: pin });
       if (error) return vistaAdmin('alumnos', `<div class="error-caja" role="alert">${esc(traducirError(error))}</div>`);
       vistaAdmin('alumnos', `<div class="ok-caja" role="status">Nuevo PIN para <strong>${esc(b.dataset.alias)}</strong>: <strong>${pin}</strong>. Apúntalo ahora.</div>`);
+    }));
+    $app.querySelectorAll('[data-nombre]').forEach((b) => b.addEventListener('click', () => {
+      S.borrador.editNombre = S.borrador.editNombre === b.dataset.nombre ? null : b.dataset.nombre; vistaAdmin('alumnos');
+      const i = $app.querySelector('[data-form-nombre] input'); if (i) i.focus();
+    }));
+    $app.querySelectorAll('[data-form-nombre]').forEach((f) => f.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const nombre = String(new FormData(f).get('nombre') || '').trim().replace(/\s+/g, ' ').slice(0, 40) || null;
+      const { error } = await sb.from('perfiles').update({ nombre }).eq('user_id', f.dataset.formNombre);
+      if (error) return vistaAdmin('alumnos', `<div class="error-caja" role="alert">${esc(traducirError(error))}</div>`);
+      S.borrador.editNombre = null; await cargarPerfiles(); await refrescar(); location.hash = '#/admin/alumnos'; vistaAdmin('alumnos');
     }));
     $app.querySelectorAll('[data-activo]').forEach((b) => b.addEventListener('click', async () => {
       const { error } = await sb.from('perfiles').update({ activo: b.dataset.valor === '1' }).eq('user_id', b.dataset.activo);
@@ -816,10 +841,11 @@
     }));
     const fin = $app.querySelector('[data-accion="fin-curso"]');
     fin.addEventListener('click', async () => {
-      if (fin.dataset.confirmar !== '1') { fin.dataset.confirmar = '1'; fin.textContent = '¿Seguro? Pulsa otra vez para desactivar a todos'; return; }
-      const { error } = await sb.from('perfiles').update({ activo: false }).eq('rol', 'alumno');
-      if (error) return toast(traducirError(error));
-      await cargarPerfiles(); vistaAdmin('alumnos', '<div class="ok-caja" role="status">Todos los alumnos desactivados.</div>');
+      if (fin.dataset.confirmar !== '1') { fin.dataset.confirmar = '1'; fin.textContent = '¿Seguro? Pulsa otra vez para desactivar a todos y borrar sus nombres'; return; }
+      const { data, error } = await sb.rpc('cerrar_curso');
+      if (error) return vistaAdmin('alumnos', `<div class="error-caja" role="alert">${esc(/cerrar_curso/.test(error.message) ? 'Falta ejecutar en Supabase el archivo 04_nombres_alumnos.sql.' : traducirError(error))}</div>`);
+      await cargarPerfiles(); await refrescar(); location.hash = '#/admin/alumnos';
+      vistaAdmin('alumnos', `<div class="ok-caja" role="status">Curso cerrado: ${data ?? 0} alumnos desactivados y sus nombres borrados.</div>`);
     });
   }
 
