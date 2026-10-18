@@ -1,6 +1,6 @@
 // Guarda la "carcasa" de la app para que abra rápido y se pueda instalar.
 // Los datos siempre se piden a Supabase (no se guardan en el móvil).
-const CACHE = 'cifeaporc-v0.3.1';
+const CACHE = 'cifeaporc-v0.3.2';
 const ARCHIVOS = [
   './', 'index.html', 'css/estilos.css', 'js/config.js', 'js/logica.js', 'js/app.js',
   'manifest.webmanifest', 'img/logo.jpg', 'img/logo-mini.jpg', 'img/icono-192.png', 'img/icono-512.png',
@@ -22,8 +22,8 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || url.origin !== location.origin) return; // Supabase y fuentes: siempre a la red
   // Primero la red (para recibir mejoras al momento); si no hay conexión, la copia guardada.
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' }) // pregunta siempre al servidor si hay versión nueva
       .then((r) => { const copia = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copia)); return r; })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match('index.html')))
+      .catch(() => caches.match(e.request, { ignoreSearch: true }).then((r) => r || caches.match('index.html')))
   );
 });

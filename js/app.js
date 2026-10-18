@@ -1013,7 +1013,12 @@
   });
 
   async function iniciar() {
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update()).catch(() => {});
+      // Cuando se instala una versión nueva, recarga una vez para usarla.
+      let recargado = !navigator.serviceWorker.controller; // la primera instalación no recarga
+      navigator.serviceWorker.addEventListener('controllerchange', () => { if (!recargado && !location.hash.startsWith('#/registrar')) { recargado = true; location.reload(); } });
+    }
     try {
       const { data } = await sb.auth.getSession();
       S.sesion = data.session;
