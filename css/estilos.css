@@ -143,3 +143,17 @@ legend { font-weight: 700; font-size: 15px; padding: 0 6px; }
   .cuerpo { padding: 0; }
   .tarjeta { border: 0; }
 }
+
+/* ---- Sanidad: calendario y tablas anchas */
+.tabla-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; background: #fff; }
+.tabla.ancha { min-width: 760px; }
+.tabla.ancha th, .tabla.ancha td { white-space: nowrap; }
+.calendario { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+.calendario b { font-size: 12px; color: var(--verde-osc); padding: 4px 0; }
+.calendario .dia { min-height: 48px; border: 1px solid #E3E8E5; border-radius: 10px; background: #fff; font: inherit; font-size: 14px; padding: 4px 2px; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: inherit; }
+.calendario .dia.hoy { border-color: var(--verde); border-width: 2px; font-weight: 700; }
+.calendario .dia.sel { background: var(--verde-claro); }
+.calendario .puntos { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; }
+.calendario .puntos i { width: 7px; height: 7px; border-radius: 50%; display: block; }
+fieldset { border: 1px solid #DCE3DF; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 12px; }
+legend { font-weight: 700; padding: 0 6px; }

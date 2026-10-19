@@ -20,6 +20,7 @@ App web instalable para gestionar la explotación porcina de ciclo cerrado (chat
 | `sql/02_profesor.sql` | Dar rol de profesor a una cuenta |
 | `sql/03_importar_historial.sql` | Historial de 14 cerdas importado de las fichas anteriores (repetible) |
 | `sql/04_nombres_alumnos.sql` | Nombre opcional de los alumnos, visible solo en su curso; se borra al cerrar el curso |
+| `sql/05_sanidad_verracos.sql` | Sanidad (previstos y realizados), catálogo de medicamentos y extracciones de los verracos (repetible) |
 | `.github/workflows/mantener-activa.yml` | Evita que Supabase pause el proyecto en vacaciones |
 
 ## Copia de seguridad
@@ -28,10 +29,11 @@ El plan gratuito de Supabase no hace copias automáticas. En la app, **Gestión 
 
 ## Valores de referencia
 
-Están en `js/logica.js` (`REF`): ecografía desde el día 19 (ideal 21), entrada en paridera IA + 99, parto IA + 114, lactación 30 días, intervalo destete-cubrición 4–6 días, 7–9 destetados por camada, dosis con aviso el día 4 y caducadas tras el día 5 (extracción = día 0).
+Están en `js/logica.js` (`REF`): ecografía desde el día 19 (ideal 21), entrada en paridera IA + 109, parto IA + 114, lactación 30 días, intervalo destete-cubrición 4–6 días, 7–9 destetados por camada, dosis con aviso el día 4 y caducadas tras el día 5 (extracción = día 0).
 
 ## Fases
 
 1. **Hecha:** censo, fichas de cerda, ciclos reproductivos, avisos, dos granjas, accesos y gestión del profesor.
-2. Extracciones y dosis, lotes de transición y cebo, sanidad y catálogo de productos.
-3. Plano de la granja, índices, comparación entre granjas y exportación a Excel.
+2. **Hecha (0.4.0):** sanidad con calendario, registro y catálogo de medicamentos; ficha del verraco con extracciones y dosis; adopciones en los dos sentidos; causas de baja.
+3. Lotes de transición y cebo.
+4. Plano de la granja, índices, comparación entre granjas y exportación a Excel.

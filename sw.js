@@ -1,10 +1,10 @@
 // Guarda la "carcasa" de la app para que abra rápido y se pueda instalar.
 // Los datos siempre se piden a Supabase (no se guardan en el móvil).
-const CACHE = 'cifeaporc-v0.3.3';
+const CACHE = 'cifeaporc-v0.4.0';
 const ARCHIVOS = [
   './', 'index.html', 'css/estilos.css', 'js/config.js', 'js/logica.js', 'js/app.js',
   'manifest.webmanifest', 'img/logo.jpg', 'img/logo-mini.jpg', 'img/icono-192.png', 'img/icono-512.png',
-  'img/hembra.jpg', 'img/madre.jpg', 'img/verraco.jpg', 'img/granja.jpg',
+  'img/hembra.jpg', 'img/madre.jpg', 'img/verraco.jpg', 'img/granja.jpg', 'img/salud.jpg',
 ];
 
 self.addEventListener('install', (e) => {

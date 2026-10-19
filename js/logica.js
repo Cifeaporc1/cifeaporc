@@ -7,7 +7,7 @@
   const REF = {
     ecoDesde: 19,        // días tras la IA a partir de los que se puede ecografiar
     ecoIdeal: 21,
-    paridera: 99,        // entrada prevista en paridera: IA + 99
+    paridera: 109,       // entrada prevista en paridera: IA + 109
     gestacion: 114,      // parto probable: IA + 114
     lactacion: 30,
     idcMin: 4, idcMax: 6,          // intervalo destete-cubrición
@@ -15,6 +15,9 @@
     dosisAviso: 4, dosisCaduca: 5, // el día de extracción es el día 0
     sinEcoDias: 35,      // a partir de aquí, una IA sin ecografía se trata como posible gestación
   };
+
+  // Causas de baja (lechones y animales del censo)
+  const CAUSAS_BAJA = ['Aplastamiento', 'Diarrea', 'Raquítico', 'No viable', 'Patas abiertas', 'Meningitis', 'Cojo', 'Otros'];
 
   const CAPACIDAD = { 'Vacías': 10, 'Gestación': 8, 'Implantación': 12, 'Partos': 1 };
 
@@ -223,6 +226,15 @@
         if (est.fase === 'destetada' && (idc < REF.idcMin || idc > REF.idcMax))
           avisosF.push(`Intervalo destete-cubrición de ${idc} días (referencia ${REF.idcMin}–${REF.idcMax}).`);
       }
+      const ds = v.extraccion && ctx.dosis ? ctx.dosis(v.extraccion) : null;
+      if (ds && v.fecha) {
+        if (v.fecha < ds.ext.fecha) errores.push('La inseminación no puede ser anterior a la extracción de la dosis.');
+        else {
+          const st = estadoDosis(ds.ext, ds.usadas, v.fecha);
+          if (st.dia > REF.dosisCaduca) avisosF.push(`La dosis tiene ${st.dia} días: está caducada (válida hasta el día ${REF.dosisCaduca}).`);
+          if (st.restantes < 2) avisosF.push(`De esa extracción quedan ${st.restantes} dosis y cada inseminación usa 2.`);
+        }
+      }
     }
     if (tipo === 'eco') {
       if (!ia) errores.push('No hay una inseminación abierta para esta cerda.');
@@ -265,15 +277,19 @@
         avisosF.push(`${dest} destetados (referencia ${REF.destetadosMin}–${REF.destetadosMax} en chato murciano).`);
     }
     if (tipo === 'adopcion') {
-      if (!v.sentido) errores.push('Indica si la cerda recibe o cede lechones.');
-      if (!v.otra_cerda) errores.push('Elige la otra cerda.');
-      if (!n(v.numero)) errores.push('Indica cuántos lechones.');
-      if (v.sentido === 'sale' && cur && cur.parto && n(v.numero) > camada(cur).actuales)
+      const recibe = n(v.recibe_num), cede = n(v.cede_num);
+      if (!recibe && !cede) errores.push('Indica cuántos lechones recibe y/o cuántos cede.');
+      if (recibe && !v.recibe_de) errores.push('Elige de qué cerda recibe los lechones.');
+      if (cede && !v.cede_a) errores.push('Elige a qué cerda cede los lechones.');
+      if (cede && cur && cur.parto && cede > camada(cur).actuales + recibe)
         errores.push('No puede ceder más lechones de los que tiene.');
+      if (recibe && ctx.camadaDe && v.recibe_de && recibe > ctx.camadaDe(v.recibe_de))
+        avisosF.push(`La cerda que cede solo tiene ${ctx.camadaDe(v.recibe_de)} lechones según los registros.`);
     }
     if (tipo === 'baja_lechones') {
       if (!n(v.numero)) errores.push('Indica cuántos lechones.');
       if (!v.causa) errores.push('Indica la causa.');
+      else if (v.causa === 'Otros' && !String(v.causa_otra || '').trim()) errores.push('Escribe la causa.');
       if (cur && cur.parto && n(v.numero) > camada(cur).actuales) errores.push('Son más bajas que lechones tiene la cerda.');
     }
     // Ocupación de la plaza de destino
@@ -286,7 +302,71 @@
     return { errores, avisos: avisosF };
   }
 
-  const api = { REF, CAPACIDAD, FASES, sumarDias, dias, hoyISO, ordenar, estadoCerda, camada, fechasCiclo, indicesCiclo, avisos, ocupacion, capacidadDe, comprobar };
+  // ---- Sanidad ----
+  // grupo: 'lechones' (manejos y hierro de la camada), 'medicamento', 'higiene'
+  const SANIDAD = {
+    vacunacion:     { nombre: 'Vacunación', grupo: 'medicamento' },
+    desparasitacion:{ nombre: 'Desparasitación', grupo: 'medicamento' },
+    tratamiento:    { nombre: 'Tratamiento con medicamento', grupo: 'medicamento', motivo: true },
+    hierro:         { nombre: 'Hierro a los lechones', grupo: 'lechones', producto: true },
+    colmillos:      { nombre: 'Corte de colmillos', grupo: 'lechones', motivo: true },
+    raboteo:        { nombre: 'Raboteo', grupo: 'lechones', motivo: true },
+    castracion:     { nombre: 'Castración', grupo: 'lechones', edad: true },
+    limpieza:       { nombre: 'Limpieza', grupo: 'higiene' },
+    desinfeccion:   { nombre: 'Desinfección', grupo: 'higiene', producto: true },
+    desinsectacion: { nombre: 'Desinsectación', grupo: 'higiene', producto: true },
+    desratizacion:  { nombre: 'Desratización', grupo: 'higiene', producto: true },
+    otro:           { nombre: 'Otro', grupo: 'medicamento' },
+  };
+  const ZONAS = ['Parques de vacías', 'Sala de implantación', 'Parques de gestación', 'Sala de partos 1', 'Sala de partos 2', 'Sala de partos 3', 'Verraqueras', 'Lechoneras', 'Cebadero', 'Toda la nave', 'Exterior / almacén'];
+
+  function usaProducto(tipo) { const t = SANIDAD[tipo]; return t && (t.grupo === 'medicamento' || t.producto); }
+
+  function comprobarSanidad(v, ctx) {
+    const errores = [], avisosF = [];
+    const T = SANIDAD[v.tipo];
+    if (!T) errores.push('Elige qué se hace.');
+    if (!v.fecha) errores.push('Falta la fecha.');
+    else if (v.estado === 'realizado' && v.fecha > sumarDias(ctx.hoy, 1)) errores.push('Un tratamiento realizado no puede tener fecha futura. Si es para más adelante, márcalo como previsto.');
+    else if (v.estado === 'previsto' && v.fecha < ctx.hoy) avisosF.push('La fecha prevista ya ha pasado.');
+    if ((v.ambito === 'cerda' || v.ambito === 'camada') && !v.cerda_id) errores.push('Elige la cerda.');
+    if (v.ambito === 'verraco' && !v.verraco_id) errores.push('Elige el verraco.');
+    if (v.ambito === 'zona' && !v.zona) errores.push('Elige la zona.');
+    if (T && T.motivo && v.estado === 'realizado' && !String(v.motivo || '').trim())
+      errores.push(v.tipo === 'tratamiento' ? 'Indica el motivo del tratamiento.' : v.tipo === 'raboteo' ? 'Indica el motivo (caudofagia detectada).' : 'Indica el motivo (lesiones observadas).');
+    if (T && usaProducto(v.tipo) && v.estado === 'realizado' && !v.medicamento_id && !String(v.producto || '').trim())
+      errores.push('Indica el producto utilizado.');
+    if (v.caducidad && v.fecha && v.caducidad < v.fecha) avisosF.push(`El producto está caducado (caducidad ${v.caducidad.split('-').reverse().join('/')}).`);
+    if (v.tipo === 'castracion' && v.edad && Number(v.edad) > 7) avisosF.push('Lechones de más de 7 días: revisa los requisitos legales (anestesia, analgesia y veterinario).');
+    if (v.repetir_dias && !(Number(v.repetir_dias) > 0)) errores.push('«Repetir cada» debe ser un número de días mayor que 0.');
+    return { errores, avisos: avisosF };
+  }
+
+  // Avisos de sanidad: previstos vencidos, de hoy o de los próximos 3 días
+  function avisosSanidad(registros, hoy, nombreDe) {
+    const out = [];
+    for (const r of registros) {
+      if (r.estado !== 'previsto') continue;
+      const d = dias(hoy, r.fecha);
+      if (d > 3) continue;
+      out.push({ sanidadId: r.id, titulo: `${(SANIDAD[r.tipo] || {}).nombre || r.tipo} prevista`, detalle: `${nombreDe(r)}${d < 0 ? ` · retrasada ${-d} ${d === -1 ? 'día' : 'días'}` : d === 0 ? ' · hoy' : d === 1 ? ' · mañana' : ` · en ${d} días`}`, fecha: r.fecha, nivel: d <= 0 ? 'urgente' : 'proximo' });
+    }
+    return out;
+  }
+
+  // ---- Dosis de semen: extracción = día 0; aviso el día 4; caducada tras el día 5.
+  // Cada inseminación registrada usa 2 dosis (la 2.ª al día siguiente).
+  function estadoDosis(ext, iasUsadas, hoy) {
+    const dia = dias(ext.fecha, hoy);
+    const restantes = Math.max(0, (Number(ext.n_dosis) || 0) - 2 * iasUsadas);
+    let estado = 'valida';
+    if (dia > REF.dosisCaduca) estado = 'caducada';
+    else if (restantes === 0) estado = 'agotada';
+    else if (dia >= REF.dosisAviso) estado = 'usar';
+    return { dia, restantes, estado };
+  }
+
+  const api = { REF, CAUSAS_BAJA, CAPACIDAD, SANIDAD, ZONAS, usaProducto, comprobarSanidad, avisosSanidad, estadoDosis, FASES, sumarDias, dias, hoyISO, ordenar, estadoCerda, camada, fechasCiclo, indicesCiclo, avisos, ocupacion, capacidadDe, comprobar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Logica = api;
 })(typeof window !== 'undefined' ? window : globalThis);
