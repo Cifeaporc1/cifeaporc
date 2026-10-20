@@ -749,13 +749,13 @@
     let t = '';
     for (let j = 10; j >= 1; j--) {
       const yy = 50 + (10 - j) * 27; const it = D.implantacion[j] || [];
-      t += caja(20, yy, 280, 27, it.length ? '' : 'libre') + num(36, yy + 19, j, 'num peq');
+      t += caja(180, yy, 120, 27, it.length ? '' : 'libre') + num(194, yy + 19, j, 'num peq');
       if (it.length) {
-        const dib = `<ellipse cx="80" cy="${yy + 23}" rx="19" ry="3.5" fill="${COLOR_FASE[it[0].fase]}"/><use href="#cerdito" x="62" y="${yy + 2}" width="36" height="22"/><text x="108" y="${yy + 19}" class="crotal izq">${esc(it.map((x) => x.c.crotal).join(', '))}</text>`;
+        const dib = `<ellipse cx="226" cy="${yy + 23}" rx="17" ry="3.5" fill="${COLOR_FASE[it[0].fase]}"/><use href="#cerdito" x="210" y="${yy + 3}" width="33" height="21"/><text x="247" y="${yy + 19}" class="crotal izq">${esc(it.map((x) => x.c.crotal).join(','))}</text>`;
         t += ancho ? `<a href="#/cerda/${it[0].c.id}">${dib}</a>` : `<g>${dib}</g>`;
       }
     }
-    g += zona('implantacion', 20, 50, 280, 270, 'Sala de implantación', t) + num(160, 345, 'SALA IMPLANTACIÓN', 'rotulo');
+    g += zona('implantacion', 180, 50, 120, 270, 'Sala de implantación', t) + num(240, 345, 'IMPLANTACIÓN', 'rotulo');
     // Parques de vacías (2 a la izquierda, 1 a la derecha)
     t = '';
     [[2, 330], [1, 470]].forEach(([p, x]) => { const it = D.vacias[p]; t += caja(x, 50, 140, 270) + circulo(x + 70, 75, p) + cerdosSVG(it, x + 4, 95, 132, 220, ancho) + num(x + 70, 312, `${it.length}/10`, 'num peq'); });
