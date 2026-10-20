@@ -157,3 +157,49 @@ legend { font-weight: 700; font-size: 15px; padding: 0 6px; }
 .calendario .puntos i { width: 7px; height: 7px; border-radius: 50%; display: block; }
 fieldset { border: 1px solid #DCE3DF; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 12px; }
 legend { font-weight: 700; padding: 0 6px; }
+
+/* ---- Plano de la granja */
+#app.ancho { max-width: 1400px; }
+.plano-caja { background: #fff; border-radius: 12px; padding: 6px; border: 1px solid #DCE3DF; }
+.plano { width: 100%; height: auto; display: block; font-family: inherit; }
+.plano .zona-plano rect { fill: #F3F6F4; transition: fill .15s; }
+.plano .zona-plano:hover rect, .plano .zona-plano:focus rect { fill: var(--verde-claro); }
+.plano .corral { fill: none; stroke: #2B3A33; stroke-width: 2; pointer-events: none; }
+.plano .corral.servicio { fill: #ECEAE4; }
+.plano text, .plano g, .plano .circ { pointer-events: none; }
+.plano text { fill: #1F2A24; }
+.plano .num { font-size: 20px; font-weight: 700; }
+.plano .num.peq { font-size: 15px; }
+.plano .num.mini { font-size: 13px; font-weight: 400; }
+.plano .num.grande { font-size: 28px; }
+.plano .num.exceso { fill: var(--rojo); }
+.plano .num.lech { font-size: 14px; fill: #7A3E9D; }
+.plano .rotulo { font-size: 20px; letter-spacing: 1px; font-weight: 700; fill: var(--verde); }
+.plano .crotal { font-size: 14px; font-weight: 700; }
+.plano .crotal.izq { text-anchor: start; }
+.plano .circ { fill: #fff; stroke: #2B3A33; stroke-width: 2; }
+.plano .puerta { stroke: #2B3A33; stroke-width: 3; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
+.leyenda i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.corral-g { background: #fff; border: 1px solid #DCE3DF; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cerdos { display: flex; flex-wrap: wrap; gap: 8px; }
+.cerdo { display: flex; flex-direction: column; align-items: center; width: 76px; text-decoration: none; color: var(--tinta); text-align: center; line-height: 1.2; }
+.cerdo svg { width: 64px; height: 46px; }
+.pila { display: flex; flex-direction: column; gap: 8px; }
+.sala-partos { display: grid; grid-template-columns: 1fr 12px 1fr; gap: 6px; }
+.pasillo { background: repeating-linear-gradient(180deg, #DCE3DF 0 8px, transparent 8px 14px); border-radius: 4px; }
+.recuento-celda { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; border: 1px solid #DCE3DF; border-radius: 10px; min-height: 64px; text-decoration: none; color: var(--tinta); padding: 4px 2px; }
+.recuento-celda.ocupado { background: var(--verde-claro); }
+.recuento-celda.exceso { background: var(--rojo-claro); }
+.recuento-celda strong { font-size: 18px; }
+.cebadero { background: #fff; border-radius: 12px; padding: 6px; }
+.cebadero > div:not(.pasillo-h) { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; }
+.cebadero .recuento-celda { min-height: 70px; min-width: 0; }
+.cebadero .recuento-celda .suave { display: none; }
+.pasillo-h { height: 12px; }
+.rejilla-rec { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+@media (min-width: 700px) { .cebadero .recuento-celda .suave { display: block; font-size: 11px; } }
+@media print { .plano-caja { border: none; } #app.ancho { max-width: none; } }
+.zonas-botones { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.zonas-botones a { display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 0 14px; background: #fff; border: 1px solid #DCE3DF; border-radius: 12px; text-decoration: none; color: var(--tinta); }
+.zonas-botones strong { color: var(--verde); font-size: 18px; }

@@ -19,7 +19,7 @@
   // Causas de baja (lechones y animales del censo)
   const CAUSAS_BAJA = ['Aplastamiento', 'Diarrea', 'Raquítico', 'No viable', 'Patas abiertas', 'Meningitis', 'Cojo', 'Otros'];
 
-  const CAPACIDAD = { 'Vacías': 10, 'Gestación': 8, 'Implantación': 12, 'Partos': 1 };
+  const CAPACIDAD = { 'Vacías': 10, 'Gestación': 8, 'Implantación': 10, 'Partos': 1, 'Lechonera': 25 };
 
   const FASES = [
     { id: 'vacia', nombre: 'Vacía' },
@@ -202,8 +202,20 @@
     }
     return zonas;
   }
+  // Traduce la ubicación guardada en los registros a un sitio del plano
+  function sitioPlano(u) {
+    let m;
+    if (!u) return null;
+    if ((m = /^Implantación · jaula (\d+)/.exec(u))) return { zona: 'implantacion', n: +m[1] };
+    if (u === 'Implantación') return { zona: 'implantacion', n: null };
+    if ((m = /^Vacías · parque (\d+)/.exec(u))) return { zona: 'vacias', n: +m[1] };
+    if ((m = /^Gestación · parque (\d+)/.exec(u))) return { zona: 'gestacion', n: +m[1] };
+    if ((m = /^Partos · sala (\d+) · paridera (\d+)/.exec(u))) return { zona: 'partos', sala: +m[1], n: +m[2] };
+    return null;
+  }
   function capacidadDe(ubicacion) {
     if (!ubicacion) return null;
+    if (/ · jaula \d+$/.test(ubicacion)) return 1; // una cerda por jaula de implantación
     const zona = ubicacion.split(' · ')[0];
     return CAPACIDAD[zona] ?? null;
   }
@@ -366,7 +378,7 @@
     return { dia, restantes, estado };
   }
 
-  const api = { REF, CAUSAS_BAJA, CAPACIDAD, SANIDAD, ZONAS, usaProducto, comprobarSanidad, avisosSanidad, estadoDosis, FASES, sumarDias, dias, hoyISO, ordenar, estadoCerda, camada, fechasCiclo, indicesCiclo, avisos, ocupacion, capacidadDe, comprobar };
+  const api = { REF, CAUSAS_BAJA, CAPACIDAD, SANIDAD, ZONAS, usaProducto, comprobarSanidad, avisosSanidad, estadoDosis, FASES, sumarDias, dias, hoyISO, ordenar, estadoCerda, camada, fechasCiclo, indicesCiclo, avisos, ocupacion, capacidadDe, sitioPlano, comprobar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Logica = api;
 })(typeof window !== 'undefined' ? window : globalThis);

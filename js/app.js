@@ -10,7 +10,7 @@
   const S = {
     sesion: null, perfil: null, granja: null, granjas: [],
     cerdas: [], verracos: [], eventos: [], porCerda: {}, cargado: null,
-    perfiles: null, borrador: {}, nombres: {}, medicamentos: [], sanidad: [], extracciones: [], faltaSQL05: false, ultimaCopia: (() => { try { const x = localStorage.getItem('cife-ultima-copia'); return x ? new Date(x) : null; } catch (_) { return null; } })(),
+    perfiles: null, borrador: {}, nombres: {}, medicamentos: [], sanidad: [], extracciones: [], faltaSQL05: false, recuentos: [], faltaSQL06: false, ultimaCopia: (() => { try { const x = localStorage.getItem('cife-ultima-copia'); return x ? new Date(x) : null; } catch (_) { return null; } })(),
   };
   const $app = document.getElementById('app');
 
@@ -59,6 +59,7 @@
     cerdas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h12v16H6zM9 9h6M9 13h6M9 17h3"/></svg>',
     verracos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6v4l3 3v11H6V10l3-3z"/></svg>',
     cuenta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>',
+    plano: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18v16H3zM3 11h8M11 4v16M15 11h6"/></svg>',
     sanidad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></svg>',
     admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
     mas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
@@ -98,6 +99,8 @@
       opc(sb.from('sanidad').select('*').eq('granja_id', S.granja).order('fecha').order('creado')),
       opc(sb.from('extracciones').select('*').eq('granja_id', S.granja).order('fecha').order('creado')),
     ]);
+    { const r = await sb.from('recuentos').select('*').eq('granja_id', S.granja).order('fecha').order('creado');
+      S.faltaSQL06 = !!r.error; S.recuentos = r.error ? [] : r.data; }
     // Nombres visibles (los de la propia granja y los profesores). Si la función
     // aún no existe en Supabase, la app sigue funcionando solo con alias.
     const nv = await sb.rpc('nombres_visibles');
@@ -240,6 +243,7 @@
           <div class="opciones">${L.FASES.map((f) => `<span class="chip ${recuento[f.id] ? '' : 'gris'}">${f.nombre}: ${recuento[f.id] || 0}</span>`).join('')}</div>
           ${S.cerdas.length === 0 ? `<div class="suave">Aún no hay cerdas en el censo.${esProf() ? ' Dalas de alta en Gestión.' : ''}</div>` : ''}</div>
         <a class="btn" href="#/cerdas">${ICONOS.mas}Registrar evento</a>
+        <a class="btn sec" href="#/plano">${ICONOS.plano}Plano de la granja</a>
       </main>${navegacion('inicio')}`);
   }
 
@@ -251,6 +255,7 @@
     pintar(`${cabecera()}
       <main class="cuerpo">
         <div class="entre"><h1 style="font-size:22px">Cerdas</h1><span class="suave">${cerdasActivas().length} en el censo</span></div>
+        <a class="btn sec peq" href="#/plano">${ICONOS.plano}Ver en el plano</a>
         <div class="campo"><input id="buscar" type="text" inputmode="search" aria-label="Buscar por crotal" placeholder="Buscar por crotal…" value="${esc(filtro)}"></div>
         <div class="lista">${lista.map((c) => {
           const e = estadoDe(c.id);
@@ -410,8 +415,8 @@
     ia: {
       nombre: 'Inseminación',
       ayuda: 'Fecha de la 1.ª inseminación (la de detección del celo). La 2.ª dosis se da por hecha al día siguiente con el mismo verraco.',
-      campos: [F.fecha, { n: 'verraco', t: 'verraco', l: 'Verraco' }, { n: 'extraccion', t: 'extraccion', l: 'Dosis de la extracción', si: (v) => !!v.verraco }, F.obs],
-      ubicacion: () => 'Implantación',
+      campos: [F.fecha, { n: 'jaula', t: 'select', l: 'Jaula de implantación', op: [['', 'Sin indicar'], ...rango(1, 10)] }, { n: 'verraco', t: 'verraco', l: 'Verraco' }, { n: 'extraccion', t: 'extraccion', l: 'Dosis de la extracción', si: (v) => !!v.verraco }, F.obs],
+      ubicacion: (v) => (v.jaula ? `Implantación · jaula ${v.jaula}` : 'Implantación'),
     },
     eco: {
       nombre: 'Ecografía',
@@ -469,8 +474,9 @@
         { n: 'zona', t: 'select', l: 'Zona', op: [['Vacías', 'Parque de vacías'], ['Implantación', 'Sala de implantación'], ['Gestación', 'Parque de gestación']] },
         { n: 'parque', t: 'select', l: 'Parque', op: rango(1, 2), si: (v) => v.zona === 'Vacías' },
         { n: 'parque_g', t: 'select', l: 'Parque', op: rango(1, 4), si: (v) => v.zona === 'Gestación' },
+        { n: 'jaula', t: 'select', l: 'Jaula', op: [['', 'Sin indicar'], ...rango(1, 10)], si: (v) => v.zona === 'Implantación' },
         F.obs],
-      ubicacion: (v) => (v.zona === 'Vacías' ? `Vacías · parque ${v.parque}` : v.zona === 'Gestación' ? `Gestación · parque ${v.parque_g}` : 'Implantación'),
+      ubicacion: (v) => (v.zona === 'Vacías' ? `Vacías · parque ${v.parque}` : v.zona === 'Gestación' ? `Gestación · parque ${v.parque_g}` : v.jaula ? `Implantación · jaula ${v.jaula}` : 'Implantación'),
     },
     aborto: {
       nombre: 'Aborto',
@@ -677,6 +683,222 @@
           return filas.length ? filas.map(({ x, e }) => `<a class="cerda-fila" href="#/verraco/${x.verraco_id}"><div><strong>${esc((verracoPorId(x.verraco_id) || {}).crotal || '?')}</strong><div class="suave">Extracción del ${corta(x.fecha)} · día ${e.dia}</div></div><span class="chip ${e.estado === 'usar' ? 'nar' : ''}">${e.restantes} dosis${e.estado === 'usar' ? ' · usar ya' : ''}</span></a>`).join('')
             : '<div class="suave">No hay dosis válidas registradas. Registra las extracciones desde la ficha de cada verraco (toca su crotal).</div>'; })()}</section>
       </main>${navegacion('verracos')}`);
+  }
+
+  // ---------------------------------------------------------------- plano de la granja
+  const COLOR_FASE = { vacia: '#7D8781', inseminada: '#1F5FAF', gestante: '#2F6B4F', paridera: '#C8641E', lactante: '#7A3E9D', destetada: '#A88A1E' };
+  // Cerdito chato murciano: piel oscura, hocico corto, orejas hacia delante
+  const DEFS_CERDO = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="cerdito" viewBox="0 0 64 40">
+      <path d="M9 18c-5-1-6-6-3-7 2-1 3 1 2 3" fill="none" stroke="#2A272C" stroke-width="2" stroke-linecap="round"/>
+      <rect x="15" y="27" width="6" height="10" rx="2" fill="#1E1C20"/><rect x="22" y="28" width="5" height="9" rx="2" fill="#2A272C"/>
+      <rect x="38" y="27" width="6" height="10" rx="2" fill="#1E1C20"/><rect x="45" y="28" width="5" height="9" rx="2" fill="#2A272C"/>
+      <ellipse cx="30" cy="21" rx="21" ry="12" fill="#332F35"/>
+      <path d="M14 14c6-5 22-6 30-2" fill="none" stroke="#4A454C" stroke-width="2" stroke-linecap="round"/>
+      <ellipse cx="49" cy="19" rx="9.5" ry="9" fill="#332F35"/>
+      <ellipse cx="58" cy="21" rx="3.2" ry="4.2" fill="#5A4E54"/>
+      <circle cx="58.6" cy="19.7" r=".9" fill="#1E1C20"/><circle cx="58.6" cy="22.4" r=".9" fill="#1E1C20"/>
+      <path d="M45 11l9-4-2 9z" fill="#262328"/>
+      <circle cx="51.5" cy="16.5" r="1.2" fill="#E6E0D6"/>
+    </symbol></defs></svg>`;
+
+  function datosPlano() {
+    const D = { implantacion: {}, implSin: [], vacias: { 1: [], 2: [] }, gestacion: { 1: [], 2: [], 3: [], 4: [] }, partos: {}, verraqueras: { 1: [], 2: [], 3: [], 4: [], 5: [] }, sinUbicar: [], verracosSin: [], recuento: {} };
+    for (const c of cerdasActivas().slice().sort((a, b) => (a.crotal < b.crotal ? -1 : 1))) {
+      const e = estadoDe(c.id); const s = L.sitioPlano(e.ubicacion);
+      const cm = e.fase === 'lactante' ? L.camada(e.actual) : null;
+      const item = { c, fase: e.fase, lechones: cm ? cm.actuales : null };
+      if (!s) D.sinUbicar.push(item);
+      else if (s.zona === 'implantacion') { if (s.n && s.n <= 10) (D.implantacion[s.n] = D.implantacion[s.n] || []).push(item); else D.implSin.push(item); }
+      else if (s.zona === 'partos') (D.partos[`${s.sala}-${s.n}`] = D.partos[`${s.sala}-${s.n}`] || []).push(item);
+      else if (D[s.zona] && D[s.zona][s.n]) D[s.zona][s.n].push(item);
+      else D.sinUbicar.push(item);
+    }
+    for (const v of verracosActivos()) { if (D.verraqueras[v.verraquera]) D.verraqueras[v.verraquera].push(v); else D.verracosSin.push(v); }
+    for (const r of S.recuentos) { const a = D.recuento[r.estancia]; if (!a || r.fecha > a.fecha || (r.fecha === a.fecha && r.creado > a.creado)) D.recuento[r.estancia] = r; }
+    return D;
+  }
+
+  // Coloca n cerditos dentro de un rectángulo del plano (unidades del dibujo)
+  function cerdosSVG(items, x, y, w, h, enlaces, etiqueta = (it) => it.c.crotal, color = (it) => COLOR_FASE[it.fase]) {
+    if (!items.length) return '';
+    const n = items.length;
+    let cols = Math.max(1, Math.round(Math.sqrt((n * w) / (h * 1.3))));
+    cols = Math.min(cols, n); const filas = Math.ceil(n / cols);
+    const cw = w / cols, ch = h / filas;
+    const pw = Math.min(cw * 0.86, (ch - 18) * 1.6, 72), ph = pw / 1.6;
+    return items.map((it, i) => {
+      const cx = x + cw * (i % cols) + cw / 2, cy = y + ch * Math.floor(i / cols) + (ch - ph - 16) / 2;
+      const id = it.c ? it.c.id : it.id;
+      const dentro = `<ellipse cx="${cx}" cy="${cy + ph * 0.95}" rx="${pw * 0.48}" ry="${ph * 0.16}" fill="${color(it)}"/>
+        <use href="#cerdito" x="${cx - pw / 2}" y="${cy}" width="${pw}" height="${ph}"/>
+        <text x="${cx}" y="${cy + ph + 15}" text-anchor="middle" class="crotal">${esc(etiqueta(it))}</text>`;
+      return enlaces ? `<a href="${it.c ? `#/cerda/${id}` : `#/verraco/${id}`}" aria-label="${esc(etiqueta(it))}">${dentro}</a>` : `<g>${dentro}</g>`;
+    }).join('');
+  }
+
+  function vistaPlano() {
+    const D = datosPlano();
+    const ancho = window.matchMedia('(min-width: 760px)').matches; // en el móvil, los cerditos no son enlaces (se toca la zona)
+    const zona = (z, x, y, w, h, titulo, cont) => `<a href="#/plano/${z}" class="zona-plano" aria-label="${esc(titulo)}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/></a>${cont}`;
+    const caja = (x, y, w, h, extra = '') => `<rect class="corral ${extra}" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+    const num = (x, y, t, cls = 'num') => `<text x="${x}" y="${y}" class="${cls}" text-anchor="middle">${t}</text>`;
+    const circulo = (x, y, t) => `<circle cx="${x}" cy="${y}" r="15" class="circ"/>${num(x, y + 6, t)}`;
+    let g = '';
+    // Sala de implantación (10 jaulas, la 10 arriba)
+    let t = '';
+    for (let j = 10; j >= 1; j--) {
+      const yy = 50 + (10 - j) * 27; const it = D.implantacion[j] || [];
+      t += caja(20, yy, 280, 27, it.length ? '' : 'libre') + num(36, yy + 19, j, 'num peq');
+      if (it.length) {
+        const dib = `<ellipse cx="80" cy="${yy + 23}" rx="19" ry="3.5" fill="${COLOR_FASE[it[0].fase]}"/><use href="#cerdito" x="62" y="${yy + 2}" width="36" height="22"/><text x="108" y="${yy + 19}" class="crotal izq">${esc(it.map((x) => x.c.crotal).join(', '))}</text>`;
+        t += ancho ? `<a href="#/cerda/${it[0].c.id}">${dib}</a>` : `<g>${dib}</g>`;
+      }
+    }
+    g += zona('implantacion', 20, 50, 280, 270, 'Sala de implantación', t) + num(160, 345, 'SALA IMPLANTACIÓN', 'rotulo');
+    // Parques de vacías (2 a la izquierda, 1 a la derecha)
+    t = '';
+    [[2, 330], [1, 470]].forEach(([p, x]) => { const it = D.vacias[p]; t += caja(x, 50, 140, 270) + circulo(x + 70, 75, p) + cerdosSVG(it, x + 4, 95, 132, 220, ancho) + num(x + 70, 312, `${it.length}/10`, 'num peq'); });
+    g += zona('vacias', 330, 50, 280, 270, 'Parques de vacías', t) + num(470, 345, 'PARQUE VACÍAS', 'rotulo');
+    // Parideras: 3 salas; en cada una, plazas 1-3, pasillo, plazas 4-6
+    t = '';
+    for (let s = 1; s <= 3; s++) {
+      const x0 = 640 + (s - 1) * 160;
+      t += circulo(x0 + 80, 30, s);
+      for (let k = 1; k <= 6; k++) {
+        const x = k <= 3 ? x0 : x0 + 100, y = 70 + ((k - 1) % 3) * 83; const it = D.partos[`${s}-${k}`] || [];
+        t += caja(x, y, 60, 83, it.length ? '' : 'libre') + num(x + 10, y + 16, k, 'num peq');
+        t += cerdosSVG(it, x + 2, y + 18, 56, 52, ancho);
+        if (it[0] && it[0].lechones != null) t += num(x + 30, y + 80, `+${it[0].lechones}`, 'num lech');
+      }
+    }
+    g += zona('partos', 640, 50, 480, 270, 'Parideras', t) + num(880, 345, 'PARIDERAS', 'rotulo');
+    // Parques de gestación: 3 y 4 arriba, 1 y 2 abajo
+    t = '';
+    [[3, 1150, 40], [4, 1380, 40], [1, 1150, 400], [2, 1380, 400]].forEach(([p, x, y]) => { const it = D.gestacion[p]; t += caja(x, y, 220, 270) + circulo(x + 110, y + 26, p) + cerdosSVG(it, x + 6, y + 48, 208, 200, ancho) + num(x + 110, y + 262, `${it.length}/8`, 'num peq'); });
+    g += `<a href="#/plano/gestacion" class="zona-plano" aria-label="Parques de gestación"><rect x="1150" y="40" width="450" height="270" rx="6"/></a>`;
+    g += `<a href="#/plano/gestacion" class="zona-plano" aria-label="Parques de gestación"><rect x="1150" y="400" width="450" height="270" rx="6"/></a>` + t + num(1375, 360, 'PARQUES GESTACIÓN', 'rotulo');
+    // Lechoneras 1-4
+    t = '';
+    for (let l = 1; l <= 4; l++) { const y = 420 + (l - 1) * 62; const r = D.recuento[`Lechonera ${l}`]; t += caja(930, y, 130, 62, r && r.n ? '' : 'libre') + num(948, y + 24, l, 'num peq') + (r ? num(1005, y + 38, r.n, `num grande ${r.n > 25 ? 'exceso' : ''}`) + num(1005, y + 56, corta(r.fecha), 'num mini') : num(1005, y + 40, '—', 'num')); }
+    g += zona('lechoneras', 930, 420, 130, 248, 'Lechoneras', t) + `<text x="920" y="550" class="rotulo" text-anchor="end">LECHONERAS</text>`;
+    // Verraqueras 5..1, salas de servicio
+    t = '';
+    [5, 4, 3, 2, 1].forEach((v, i) => { const x = 20 + i * 100 + (v === 1 ? 10 : 0); const it = D.verraqueras[v]; t += caja(x, 720, 95, 180, it.length ? '' : 'libre') + num(x + 47, 745, v) + cerdosSVG(it, x + 4, 760, 87, 120, ancho, (y) => y.crotal, () => '#5B6470'); });
+    g += zona('verraqueras', 20, 720, 505, 180, 'Verraqueras', t) + num(260, 705, 'VERRAQUERAS', 'rotulo');
+    g += caja(535, 720, 110, 130, 'servicio') + num(590, 780, 'Sala', 'num mini') + num(590, 798, 'extracción', 'num mini');
+    g += caja(645, 720, 120, 130, 'servicio') + num(705, 790, 'Laboratorio', 'num mini');
+    g += caja(765, 720, 200, 130, 'servicio') + num(865, 780, 'Despacho', 'num mini') + num(865, 798, 'almacén', 'num mini');
+    g += `<path d="M1010 905v-20M1100 905v-20" class="puerta"/>` + num(1055, 905, 'ENTRADA', 'rotulo');
+    // Cebadero: pares arriba, impares abajo
+    t = '';
+    let totalCebo = 0;
+    for (let k = 1; k <= 24; k++) {
+      const col = Math.ceil(k / 2) - 1, x = 1140 + col * 38, y = k % 2 === 0 ? 720 : 812; const r = D.recuento[`Cebadero ${k}`]; if (r) totalCebo += r.n;
+      t += caja(x, y, 38, 80, r && r.n ? '' : 'libre') + num(x + 19, y + 18, k, 'num mini') + num(x + 19, y + 54, r ? r.n : '·', 'num');
+    }
+    g += zona('cebadero', 1140, 720, 456, 172, 'Cebadero', t) + num(1368, 915, `CEBADERO${totalCebo ? ` · ${totalCebo} cerdos` : ''}`, 'rotulo');
+
+    const lista = (arr, fn) => arr.map(fn).join(', ');
+    pintar(`${cabecera({ volver: '#/inicio', textoVolver: 'Inicio', titulo: 'Plano de la granja' })}
+      ${DEFS_CERDO}
+      <main class="cuerpo">
+        ${S.faltaSQL06 ? `<div class="aviso-caja"><strong>Lechoneras y cebadero sin recuentos:</strong> ${esProf() ? 'ejecuta en Supabase el archivo 06_recuentos.sql.' : 'avisa al profesor.'}</div>` : ''}
+        <div class="plano-caja"><svg class="plano" viewBox="0 0 1610 925" role="img" aria-label="Plano de la granja con la posición de cada animal">${g}</svg></div>
+        <div class="zonas-botones">${[['implantacion', 'Implantación', Object.values(D.implantacion).flat().length + D.implSin.length], ['vacias', 'Vacías', D.vacias[1].length + D.vacias[2].length], ['partos', 'Parideras', Object.values(D.partos).flat().length], ['gestacion', 'Gestación', Object.values(D.gestacion).flat().length], ['verraqueras', 'Verraqueras', Object.values(D.verraqueras).flat().length], ['lechoneras', 'Lechoneras', Object.values(D.recuento).filter((r) => r.estancia.startsWith('Lechonera')).reduce((a, r) => a + r.n, 0)], ['cebadero', 'Cebadero', totalCebo]].map(([z, t, n]) => `<a href="#/plano/${z}"><span>${t}</span><strong>${n}</strong></a>`).join('')}</div>
+        <div class="suave peq">${ancho ? 'Toca un animal para abrir su ficha o una zona para verla en grande.' : 'Toca una zona para verla en grande.'}</div>
+        <div class="leyenda">${L.FASES.map((f) => `<span><i style="background:${COLOR_FASE[f.id]}"></i>${f.nombre}</span>`).join('')}<span><i style="background:#5B6470"></i>Verraco</span></div>
+        ${D.sinUbicar.length || D.implSin.length || D.verracosSin.length ? `<section class="tarjeta"><h2>Sin sitio en el plano</h2>
+          ${D.sinUbicar.length ? `<div>Cerdas sin ubicación: ${lista(D.sinUbicar, (x) => `<a href="#/cerda/${x.c.id}">${esc(x.c.crotal)}</a>`)}. <span class="suave">Registra un traslado desde su ficha.</span></div>` : ''}
+          ${D.implSin.length ? `<div>En implantación sin jaula: ${lista(D.implSin, (x) => `<a href="#/cerda/${x.c.id}">${esc(x.c.crotal)}</a>`)}. <span class="suave">Corrige su inseminación o registra un traslado indicando la jaula.</span></div>` : ''}
+          ${D.verracosSin.length ? `<div>Verracos sin verraquera: ${lista(D.verracosSin, (x) => `<a href="#/verraco/${x.id}">${esc(x.crotal)}</a>`)}. <span class="suave">${esProf() ? 'Asígnala en Gestión → Censo.' : 'Avisa al profesor.'}</span></div>` : ''}</section>` : ''}
+        <div class="suave peq">El plano muestra dónde dicen los registros que está cada animal. Si no coincide con la nave, falta registrar un movimiento.</div>
+      </main>${navegacion('cerdas')}`);
+    $app.className = 'ancho';
+  }
+
+  // ---- Una zona en grande
+  function fichaCerdo(it, tipo = 'cerda') {
+    const crotal = tipo === 'cerda' ? it.c.crotal : it.crotal;
+    const color = tipo === 'cerda' ? COLOR_FASE[it.fase] : '#5B6470';
+    return `<a class="cerdo" href="${tipo === 'cerda' ? `#/cerda/${it.c.id}` : `#/verraco/${it.id}`}">
+      <svg viewBox="0 0 64 46" aria-hidden="true"><ellipse cx="32" cy="40" rx="27" ry="5" fill="${color}"/><use href="#cerdito" x="0" y="2" width="64" height="40"/></svg>
+      <strong>${esc(crotal)}</strong><span class="peq" style="color:${color}">${tipo === 'cerda' ? faseNombre(it.fase) : 'Verraco'}${it.lechones != null ? ` · ${it.lechones} lech.` : ''}</span></a>`;
+  }
+  function vistaZona(z) {
+    const D = datosPlano();
+    const libre = '<span class="suave peq">Libre</span>';
+    const corral = (titulo, items, tipo, pie = '') => `<div class="corral-g"><div class="entre"><strong>${titulo}</strong>${pie}</div><div class="cerdos">${items.length ? items.map((i) => fichaCerdo(i, tipo)).join('') : libre}</div></div>`;
+    let titulo = '', cuerpo = '';
+    if (z === 'implantacion') {
+      titulo = 'Sala de implantación';
+      cuerpo = `<div class="pila">${[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((j) => corral(`Jaula ${j}`, D.implantacion[j] || [], 'cerda', (D.implantacion[j] || []).length > 1 ? '<span class="chip rojo">¡Más de una!</span>' : '')).join('')}</div>
+        ${D.implSin.length ? corral('Sin jaula indicada', D.implSin, 'cerda') : ''}`;
+    } else if (z === 'vacias') {
+      titulo = 'Parques de vacías';
+      cuerpo = `<div class="dos">${[2, 1].map((p) => corral(`Parque ${p}`, D.vacias[p], 'cerda', `<span class="chip ${D.vacias[p].length > 10 ? 'rojo' : ''}">${D.vacias[p].length}/10</span>`)).join('')}</div>`;
+    } else if (z === 'gestacion') {
+      titulo = 'Parques de gestación';
+      cuerpo = `<div class="dos">${[3, 4, 1, 2].map((p) => corral(`Parque ${p}`, D.gestacion[p], 'cerda', `<span class="chip ${D.gestacion[p].length > 8 ? 'rojo' : ''}">${D.gestacion[p].length}/8</span>`)).join('')}</div>`;
+    } else if (z === 'partos') {
+      titulo = 'Parideras';
+      cuerpo = [1, 2, 3].map((s) => `<section class="tarjeta"><h2>Sala ${s}</h2><div class="sala-partos">
+        <div class="pila">${[1, 2, 3].map((k) => corral(`Paridera ${k}`, D.partos[`${s}-${k}`] || [], 'cerda')).join('')}</div>
+        <div class="pasillo" aria-hidden="true"></div>
+        <div class="pila">${[4, 5, 6].map((k) => corral(`Paridera ${k}`, D.partos[`${s}-${k}`] || [], 'cerda')).join('')}</div></div></section>`).join('');
+    } else if (z === 'verraqueras') {
+      titulo = 'Verraqueras';
+      cuerpo = `<div class="dos">${[5, 4, 3, 2, 1].map((v) => corral(`Verraquera ${v}`, D.verraqueras[v], 'verraco')).join('')}</div>`;
+    } else if (z === 'lechoneras' || z === 'cebadero') {
+      const lech = z === 'lechoneras';
+      titulo = lech ? 'Lechoneras' : 'Cebadero';
+      const celda = (k) => { const est = `${lech ? 'Lechonera' : 'Cebadero'} ${k}`; const r = D.recuento[est];
+        return `<a class="recuento-celda ${r && r.n ? 'ocupado' : ''} ${lech && r && r.n > 25 ? 'exceso' : ''}" href="#/recuento/${z}/${k}"><span class="peq">${lech ? 'Lechonera ' : ''}${k}</span><strong>${r ? r.n : '—'}</strong><span class="peq suave">${r ? corta(r.fecha) : 'sin contar'}</span></a>`; };
+      const total = Object.values(D.recuento).filter((r) => r.estancia.startsWith(lech ? 'Lechonera' : 'Cebadero')).reduce((a, r) => a + r.n, 0);
+      cuerpo = `${S.faltaSQL06 ? `<div class="aviso-caja">Falta ejecutar en Supabase el archivo 06_recuentos.sql.</div>` : `<a class="btn" href="#/recuento/${z}">Apuntar recuento</a>`}
+        <div class="entre"><span>Total</span><strong>${total} ${lech ? 'lechones' : 'cerdos'}</strong></div>
+        ${lech ? `<div class="pila">${[1, 2, 3, 4].map(celda).join('')}</div><div class="suave peq">Capacidad: 25 lechones por lechonera.</div>`
+          : `<div class="cebadero"><div>${[2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24].map(celda).join('')}</div><div class="pasillo-h" aria-hidden="true"></div><div>${[1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23].map(celda).join('')}</div></div>`}
+        <div class="suave peq">Cada número es el último recuento apuntado. Toca un corral para contarlo de nuevo.</div>`;
+    } else return vistaNoEncontrado();
+    pintar(`${cabecera({ volver: '#/plano', textoVolver: 'Plano', titulo })}${DEFS_CERDO}
+      <main class="cuerpo">${cuerpo}
+        ${['lechoneras', 'cebadero'].includes(z) ? '' : `<div class="leyenda">${L.FASES.map((f) => `<span><i style="background:${COLOR_FASE[f.id]}"></i>${f.nombre}</span>`).join('')}</div>`}
+      </main>${navegacion('cerdas')}`);
+  }
+
+  // ---- Recuento de lechoneras o cebadero (se guardan solo las casillas rellenas)
+  function vistaRecuento(z, solo) {
+    if (!['lechoneras', 'cebadero'].includes(z) || S.faltaSQL06) return vistaZona(z || 'cebadero');
+    const lech = z === 'lechoneras';
+    const nums = lech ? [1, 2, 3, 4] : Array.from({ length: 24 }, (_, i) => i + 1);
+    const D = datosPlano();
+    pintar(`${cabecera({ volver: `#/plano/${z}`, textoVolver: 'Cancelar', titulo: `Recuento · ${lech ? 'lechoneras' : 'cebadero'}` })}
+      <main class="cuerpo"><form class="formu" id="f-rec" novalidate>
+        <div class="campo"><label for="r-fecha">Fecha del recuento</label><input id="r-fecha" name="fecha" type="date" value="${hoy()}" max="${hoy()}"></div>
+        <div class="suave">Escribe cuántos animales hay en cada ${lech ? 'lechonera' : 'corral'}. Deja en blanco los que no hayas contado; un corral vacío es 0.</div>
+        <div class="rejilla-rec">${nums.map((k) => { const r = D.recuento[`${lech ? 'Lechonera' : 'Cebadero'} ${k}`];
+          return `<div class="campo"><label for="r-${k}">${lech ? 'Lechonera' : 'Corral'} ${k}</label><input id="r-${k}" name="n${k}" type="number" inputmode="numeric" min="0" max="200" placeholder="${r ? `antes ${r.n}` : ''}"></div>`; }).join('')}</div>
+        <div class="campo"><label for="r-obs">Observaciones <span class="suave">(opcional)</span></label><textarea id="r-obs" name="obs"></textarea></div>
+        <div id="mensajes" aria-live="polite"></div>
+        <button class="btn" type="submit">Guardar recuento</button>
+      </form></main>`);
+    if (solo) { const i = document.getElementById(`r-${solo}`); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } }
+    document.getElementById('f-rec').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const d = Object.fromEntries(new FormData(ev.target).entries()); const msj = document.getElementById('mensajes');
+      const filas = nums.filter((k) => d[`n${k}`] !== '').map((k) => ({ granja_id: S.granja, estancia: `${lech ? 'Lechonera' : 'Cebadero'} ${k}`, fecha: d.fecha, n: parseInt(d[`n${k}`], 10), obs: d.obs.trim() || null }));
+      const err = [];
+      if (!d.fecha) err.push('Falta la fecha.'); else if (d.fecha > hoy()) err.push('La fecha no puede ser futura.');
+      if (!filas.length) err.push('No has escrito ningún número.');
+      if (filas.some((f) => !Number.isFinite(f.n) || f.n < 0 || f.n > 200)) err.push('Los números deben estar entre 0 y 200.');
+      if (err.length) { msj.innerHTML = `<div class="error-caja" role="alert">${err.map(esc).join('<br>')}</div>`; return; }
+      const exceso = lech ? filas.filter((f) => f.n > 25) : [];
+      if (exceso.length && !ev.target.dataset.confirmado) { ev.target.dataset.confirmado = '1'; msj.innerHTML = `<div class="aviso-caja" role="alert">${esc(exceso.map((f) => f.estancia).join(', '))} supera la capacidad de 25 lechones. Si es correcto, pulsa otra vez <strong>Guardar recuento</strong>.</div>`; return; }
+      const { error } = await sb.from('recuentos').insert(filas);
+      if (error) { msj.innerHTML = `<div class="error-caja" role="alert">${esc(traducirError(error))}</div>`; return; }
+      toast(`Recuento guardado (${filas.length})`); await refrescar(); location.hash = `#/plano/${z}`;
+    });
   }
 
   // ---------------------------------------------------------------- sanidad
@@ -1255,7 +1477,7 @@
       if (error) throw error;
       tablas[t] = data;
     }
-    for (const t of ['medicamentos', 'sanidad', 'extracciones']) {
+    for (const t of ['medicamentos', 'sanidad', 'extracciones', 'recuentos']) {
       const { data, error } = await sb.from(t).select('*');
       tablas[t] = error ? [] : data;
     }
@@ -1284,7 +1506,7 @@
       // Nunca se exportan contraseñas ni PIN (no están en estas tablas).
       const perfiles = T.perfiles.map(({ user_id, alias, nombre, rol, granja_id, activo, creado }) => ({ user_id, alias, nombre: nombre ?? null, rol, granja_id, activo, creado }));
       if (formato === 'json') {
-        const copia = { app: 'CIFEAPORC', version: C.version, fecha: sello.toISOString(), granjas: T.granjas, cerdas: T.cerdas, verracos: T.verracos, perfiles, eventos: T.eventos, medicamentos: T.medicamentos, sanidad: T.sanidad, extracciones: T.extracciones };
+        const copia = { app: 'CIFEAPORC', version: C.version, fecha: sello.toISOString(), granjas: T.granjas, cerdas: T.cerdas, verracos: T.verracos, perfiles, eventos: T.eventos, medicamentos: T.medicamentos, sanidad: T.sanidad, extracciones: T.extracciones, recuentos: T.recuentos };
         descargar(`${fichero}.json`, JSON.stringify(copia, null, 1), 'application/json');
       } else {
         if (!window.XLSX) await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
@@ -1306,6 +1528,7 @@
         hoja('Sanidad', T.sanidad.map((r) => ({ Granja: r.granja_id === 1 ? '1.º' : '2.º', Estado: r.estado === 'previsto' ? 'Previsto' : 'Realizado', Fecha: r.fecha, Qué: nombreSan(r.tipo), Destino: r.ambito === 'zona' ? r.zona : r.ambito === 'granja' ? 'Toda la granja' : r.ambito === 'verraco' ? `Verraco ${verracoDe[r.verraco_id] || '?'}` : `${r.ambito === 'camada' ? 'Lechones de ' : 'Cerda '}${crotalDe[r.cerda_id] || '?'}`, 'Nº animales': r.n_animales ?? '', Producto: r.producto || '', 'Materia activa': (medDe[r.medicamento_id] || {}).materia_activa || '', Dosis: r.dosis || '', Vía: r.via || '', Lote: r.lote || '', Caducidad: r.caducidad || '', 'Supresión hasta': r.supresion_hasta || '', Motivo: r.motivo || '', Observaciones: r.obs || '', 'Registrado por': aliasDe[r.autor] || r.autor_alias || '', 'Realizado por': r.realizado_por || '' })));
         hoja('Medicamentos', T.medicamentos.map((m) => ({ 'Nombre comercial': m.nombre, 'Materia activa': m.materia_activa || '', Tipo: m.tipo, Presentación: m.presentacion || '', Dosificación: m.dosis || '', Vía: m.via || '', 'Supresión (días)': m.supresion_dias ?? '', Lote: m.lote || '', Caducidad: m.caducidad || '', 'Ficha técnica': m.ficha_url || '', Activo: m.activo ? 'Sí' : 'No' })));
         hoja('Extracciones', T.extracciones.map((x) => ({ Granja: x.granja_id === 1 ? '1.º' : '2.º', Verraco: verracoDe[x.verraco_id] || '?', Extracción: x.fecha, Verificación: x.fecha_verificacion || '', 'Nº dosis': x.n_dosis, 'Motilidad %': x.motilidad ?? '', 'Volumen c.c.': x.volumen ?? '', Observaciones: x.obs || '', 'Registrado por': aliasDe[x.autor] || x.autor_alias || '' })));
+        hoja('Recuentos', T.recuentos.map((x) => ({ Granja: x.granja_id === 1 ? '1.º' : '2.º', Estancia: x.estancia, Fecha: x.fecha, Animales: x.n, Observaciones: x.obs || '', 'Registrado por': aliasDe[x.autor] || x.autor_alias || '' })));
         hoja('Alumnos', perfiles.map((p) => ({ Alias: p.alias, Nombre: p.nombre || '', Rol: p.rol, Granja: p.granja_id ? (p.granja_id === 1 ? '1.º' : '2.º') : 'Las dos', Activo: p.activo ? 'Sí' : 'No' })));
         hoja('Información', [{ App: 'CIFEAPORC', Versión: C.version, 'Copia del': fechaHora(sello), Cerdas: T.cerdas.length, Verracos: T.verracos.length, Eventos: T.eventos.length, Nota: 'Las contraseñas y los PIN no se exportan.' }]);
         X.writeFile(libro, `${fichero}.xlsx`);
@@ -1466,6 +1689,8 @@
       case 'registrar': return vistaRegistrar(a, b, c);
       case 'verracos': return vistaVerracos();
       case 'verraco': return vistaVerraco(a);
+      case 'plano': return a ? vistaZona(a) : vistaPlano();
+      case 'recuento': return vistaRecuento(a, b);
       case 'extraccion': return vistaExtraccion(a, b);
       case 'sanidad':
         if (['nuevo', 'programar'].includes(a)) return vistaSanidadForm(a, null, { ambito: b, ref: c });

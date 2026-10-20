@@ -20,6 +20,7 @@ App web instalable para gestionar la explotación porcina de ciclo cerrado (chat
 | `sql/02_profesor.sql` | Dar rol de profesor a una cuenta |
 | `sql/03_importar_historial.sql` | Historial de 14 cerdas importado de las fichas anteriores (repetible) |
 | `sql/04_nombres_alumnos.sql` | Nombre opcional de los alumnos, visible solo en su curso; se borra al cerrar el curso |
+| `sql/06_recuentos.sql` | Recuentos de animales en lechoneras y cebadero, para el plano (repetible) |
 | `sql/05_sanidad_verracos.sql` | Sanidad (previstos y realizados), catálogo de medicamentos y extracciones de los verracos (repetible) |
 | `.github/workflows/mantener-activa.yml` | Evita que Supabase pause el proyecto en vacaciones |
 
@@ -36,4 +37,5 @@ Están en `js/logica.js` (`REF`): ecografía desde el día 19 (ideal 21), entrad
 1. **Hecha:** censo, fichas de cerda, ciclos reproductivos, avisos, dos granjas, accesos y gestión del profesor.
 2. **Hecha (0.4.0):** sanidad con calendario, registro y catálogo de medicamentos; ficha del verraco con extracciones y dosis; adopciones en los dos sentidos; causas de baja.
 3. Lotes de transición y cebo.
-4. Plano de la granja, índices, comparación entre granjas y exportación a Excel.
+4. **Hecho (0.5.0):** plano de la granja con cada animal en su sitio y recuentos de lechoneras y cebadero.
+5. Índices, comparación entre granjas y exportación a Excel.
