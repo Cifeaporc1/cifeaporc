@@ -18,6 +18,9 @@
 
   // Causas de baja (lechones y animales del censo)
   const CAUSAS_BAJA = ['Aplastamiento', 'Diarrea', 'Raquítico', 'No viable', 'Patas abiertas', 'Meningitis', 'Cojo', 'Otros'];
+  // Para cerdas, verracos y cerdos de cebo se añaden causas propias de adultos (Otros, al final)
+  const CAUSAS_ADULTO = ['Desvieje', 'Problemas reproductivos', 'Venta', 'Muerte súbita', ...CAUSAS_BAJA];
+  const CAUSAS_CEBO = ['Muerte súbita', ...CAUSAS_BAJA];
 
   const CAPACIDAD = { 'Vacías': 10, 'Gestación': 8, 'Implantación': 10, 'Partos': 1, 'Lechonera': 25 };
 
@@ -412,7 +415,7 @@
     return { dia, restantes, estado };
   }
 
-  const api = { REF, CAUSAS_BAJA, CAPACIDAD, SANIDAD, ZONAS, usaProducto, comprobarSanidad, avisosSanidad, estadoDosis, FASES, sumarDias, dias, hoyISO, ordenar, estadoCerda, camada, fechasCiclo, indicesCiclo, avisos, ocupacion, capacidadDe, sitioPlano, ESTANCIAS, cuentaGrupos, comprobarMovGrupo, comprobar };
+  const api = { REF, CAUSAS_BAJA, CAUSAS_ADULTO, CAUSAS_CEBO, CAPACIDAD, SANIDAD, ZONAS, usaProducto, comprobarSanidad, avisosSanidad, estadoDosis, FASES, sumarDias, dias, hoyISO, ordenar, estadoCerda, camada, fechasCiclo, indicesCiclo, avisos, ocupacion, capacidadDe, sitioPlano, ESTANCIAS, cuentaGrupos, comprobarMovGrupo, comprobar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Logica = api;
 })(typeof window !== 'undefined' ? window : globalThis);

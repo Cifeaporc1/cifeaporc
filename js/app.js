@@ -720,7 +720,7 @@
       else D.sinUbicar.push(item);
     }
     for (const v of verracosActivos()) { if (D.verraqueras[v.verraquera]) D.verraqueras[v.verraquera].push(v); else D.verracosSin.push(v); }
-    D.grupos = L.cuentaGrupos(S.recuentos, S.movGrupos);
+    D.grupos = L.cuentaGrupos(S.recuentos, movsGrupos());
     for (const [est, g] of Object.entries(D.grupos)) {
       if (!g.recuento && !g.movs.length) continue;
       const fechas = [g.recuento && g.recuento.fecha, ...g.movs.map((m) => m.fecha)].filter(Boolean).sort();
@@ -890,11 +890,20 @@
   }
 
   // ---- Un corral o lechonera: número actual, historial y acciones
+  // Movimientos de lechoneras y cebo + los destetes, que suman solos en su lechonera
+  function movsGrupos() {
+    const dest = S.eventos.filter((e) => e.tipo === 'destete' && e.datos && e.datos.lechonera).map((e) => {
+      const d = e.datos; const n = (+d.destetados_h || 0) + (+d.destetados_m || 0) + (+d.destetados_ss || 0);
+      return { id: `d-${e.id}`, virtual: true, cerda_id: e.cerda_id, tipo: 'entrada', destino: `Lechonera ${d.lechonera}`, origen: null, n, fecha: e.fecha, creado: e.creado,
+        procedencia: `Destete de ${(cerdaPorId(e.cerda_id) || {}).crotal || '?'}`, autor: e.autor, autor_alias: e.autor_alias };
+    }).filter((m) => m.n > 0);
+    return [...S.movGrupos, ...dest];
+  }
   const estanciaDe = (z, k) => `${z === 'lechoneras' ? 'Lechonera' : 'Cebadero'} ${k}`;
   const TIPOS_MOVG = { entrada: 'Entrada', traslado: 'Traslado', muerte: 'Muerte', venta: 'Venta', matadero: 'Matadero' };
   function vistaCorral(z, k) {
     if (!['lechoneras', 'cebadero'].includes(z)) return vistaNoEncontrado();
-    const est = estanciaDe(z, k); const G = L.cuentaGrupos(S.recuentos, S.movGrupos)[est];
+    const est = estanciaDe(z, k); const G = L.cuentaGrupos(S.recuentos, movsGrupos())[est];
     if (!G) return vistaNoEncontrado();
     const hist = [...S.recuentos.filter((r) => r.estancia === est).map((r) => ({ ...r, _t: 'recuento' })), ...G.movs.map((m) => ({ ...m, _t: 'mov' }))]
       .sort((a, b) => (a.fecha === b.fecha ? (String(a.creado) < String(b.creado) ? 1 : -1) : a.fecha < b.fecha ? 1 : -1));
@@ -908,7 +917,7 @@
       const cuenta = r._t === 'mov' && G.recuento && !(r.fecha > G.recuento.fecha || (r.fecha === G.recuento.fecha && String(r.creado) > String(G.recuento.creado)));
       return `<div class="evento"><div class="entre"><span>${txt}</span><span class="suave">${fmt(r.fecha)}</span></div>
         <div class="suave peq">Por ${esc(quienEs(r.autor, r.autor_alias))}${cuenta ? ' · anterior al último recuento (ya incluido en él)' : ''}${r.obs ? ` · ${esc(r.obs)}` : ''}</div>
-        ${puede(r) ? `<div class="acciones"><button class="btn peligro peq" type="button" data-borrar-g="${r._t === 'recuento' ? 'recuentos' : 'mov_grupos'}:${r.id}">Borrar</button></div>` : ''}</div>`;
+        ${r.virtual ? `<div class="suave peq">Se suma solo con el destete. Para cambiarlo, corrige el destete en la <a href="#/cerda/${r.cerda_id}">ficha de la cerda</a>.</div>` : puede(r) ? `<div class="acciones"><button class="btn peligro peq" type="button" data-borrar-g="${r._t === 'recuento' ? 'recuentos' : 'mov_grupos'}:${r.id}">Borrar</button></div>` : ''}</div>`;
     };
     pintar(`${cabecera({ volver: `#/plano/${z}`, textoVolver: z === 'lechoneras' ? 'Lechoneras' : 'Cebadero', titulo: est })}
       <main class="cuerpo">
@@ -933,10 +942,10 @@
     const clave = `movg/${tipo}/${z}/${k || ''}`;
     if (S.borrador.clave !== clave) {
       const est = k ? estanciaDe(z, k) : '';
-      S.borrador = { clave, v: { tipo: tipo === 'venta' ? 'venta' : tipo, fecha: hoy(), n: '', origen: tipo === 'entrada' ? '' : est, destino: tipo === 'entrada' ? est : '', procedencia: tipo === 'entrada' ? 'Destete' : '', causa: '', causa_otra: '', obs: '' }, confirmado: false, filtro: S.borrador.filtro };
+      S.borrador = { clave, v: { tipo: tipo === 'venta' ? 'venta' : tipo, fecha: hoy(), n: '', origen: tipo === 'entrada' ? '' : est, destino: tipo === 'entrada' ? est : '', procedencia: tipo === 'entrada' ? 'Otra granja del centro' : '', causa: '', causa_otra: '', obs: '' }, confirmado: false, filtro: S.borrador.filtro };
     }
     const v = S.borrador.v;
-    const G = L.cuentaGrupos(S.recuentos, S.movGrupos);
+    const G = L.cuentaGrupos(S.recuentos, movsGrupos());
     const opEst = (sel, filtro = () => true) => L.ESTANCIAS.filter(filtro).map((e) => `<option value="${e}" ${sel === e ? 'selected' : ''}>${e} (${G[e].n})</option>`).join('');
     const titulo = { entrada: 'Entrada de animales', traslado: 'Traslado', muerte: 'Muerte', venta: 'Venta o matadero' }[tipo];
     const volver = k ? `#/corral/${z}/${k}` : `#/plano/${z || 'cebadero'}`;
@@ -948,8 +957,8 @@
         ${tipo !== 'entrada' ? `<div class="campo"><label for="g-origen">${tipo === 'traslado' ? 'Salen de' : 'De'}</label><select id="g-origen" name="origen"><option value="">Elige…</option>${opEst(v.origen)}</select></div>` : ''}
         ${['entrada', 'traslado'].includes(tipo) ? `<div class="campo"><label for="g-destino">${tipo === 'traslado' ? 'Van a' : 'Entran en'}</label><select id="g-destino" name="destino"><option value="">Elige…</option>${opEst(v.destino, (e) => e !== v.origen)}</select></div>` : ''}
         <div class="campo"><label for="g-n">Número de animales</label><input id="g-n" name="n" type="number" inputmode="numeric" min="1" max="200" value="${esc(v.n)}"></div>
-        ${tipo === 'entrada' ? `<div class="campo"><label for="g-proc">Procedencia</label><select id="g-proc" name="procedencia">${['Destete', 'Otra granja del centro', 'Compra', 'Otro'].map((o) => `<option ${v.procedencia === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div>` : ''}
-        ${tipo === 'muerte' ? `<div class="campo"><label for="g-causa">Causa</label><select id="g-causa" name="causa"><option value="">Elige…</option>${L.CAUSAS_BAJA.map((c) => `<option ${v.causa === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+        ${tipo === 'entrada' ? `<div class="campo"><label for="g-proc">Procedencia</label><select id="g-proc" name="procedencia">${['Otra granja del centro', 'Compra', 'Otro'].map((o) => `<option ${v.procedencia === o ? 'selected' : ''}>${o}</option>`).join('')}</select><span class="ayuda">Los lechones destetados se suman solos a su lechonera al registrar el destete: no hace falta apuntarlos aquí.</span></div>` : ''}
+        ${tipo === 'muerte' ? `<div class="campo"><label for="g-causa">Causa</label><select id="g-causa" name="causa"><option value="">Elige…</option>${L.CAUSAS_CEBO.map((c) => `<option ${v.causa === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
           ${v.causa === 'Otros' ? `<div class="campo"><label for="g-co">Escribe la causa</label><input id="g-co" name="causa_otra" type="text" value="${esc(v.causa_otra)}"></div>` : ''}` : ''}
         <div class="campo"><label for="g-obs">Observaciones <span class="suave">(opcional)</span></label><textarea id="g-obs" name="obs">${esc(v.obs)}</textarea></div>
         <div id="mensajes" aria-live="polite"></div>
@@ -1476,8 +1485,8 @@
           : `<div class="campo"><label for="a-vq">Verraquera</label><select id="a-vq" name="verraquera"><option value="">—</option>${rango(1, 5).map((k) => `<option ${String(x.verraquera) === k ? 'selected' : ''}>${k}</option>`).join('')}</select></div>`}
         </fieldset>
         ${nuevo ? '' : `<fieldset ${editaBaja ? '' : 'disabled'}><legend>Baja</legend><div class="campo"><label for="a-fb">Fecha de baja</label><input id="a-fb" name="fecha_baja" type="date" max="${hoy()}" value="${esc(x.fecha_baja || (desde === 'censo' && !editaDatos ? hoy() : ''))}"></div>
-          ${(() => { const enLista = L.CAUSAS_BAJA.includes(x.causa_baja); const sel = x.causa_baja ? (enLista ? x.causa_baja : 'Otros') : '';
-            return `<div class="campo"><label for="a-cb">Causa</label><select id="a-cb" name="causa_sel"><option value="">Elige…</option>${L.CAUSAS_BAJA.map((k) => `<option ${sel === k ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
+          ${(() => { const enLista = L.CAUSAS_ADULTO.includes(x.causa_baja); const sel = x.causa_baja ? (enLista ? x.causa_baja : 'Otros') : '';
+            return `<div class="campo"><label for="a-cb">Causa</label><select id="a-cb" name="causa_sel"><option value="">Elige…</option>${L.CAUSAS_ADULTO.map((k) => `<option ${sel === k ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
             <div class="campo" id="a-otra" ${sel === 'Otros' ? '' : 'hidden'}><label for="a-co">Escribe la causa</label><input id="a-co" name="causa_otra" type="text" value="${esc(enLista ? '' : x.causa_baja || '')}"></div>`; })()}
           <div class="suave peq">Al dar de baja, el animal deja de aparecer en las dos granjas (1.º y 2.º), pero su historial se conserva.${esProf() ? ' Para anularla, vacía la fecha.' : ' Si te equivocas, avisa al profesor para anularla.'}</div></fieldset>`}
         <div id="mensajes" aria-live="polite"></div>
