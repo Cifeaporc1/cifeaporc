@@ -762,17 +762,19 @@
     g += zona('vacias', 330, 50, 280, 270, 'Parques de vacías', t) + num(470, 345, 'PARQUE VACÍAS', 'rotulo');
     // Parideras: 3 salas; en cada una, plazas 1-3, pasillo, plazas 4-6
     t = '';
+    // Cada sala es un local cerrado (pared gruesa) con su pasillo central; entre salas, separación
     for (let s = 1; s <= 3; s++) {
-      const x0 = 640 + (s - 1) * 160;
-      t += circulo(x0 + 80, 30, s);
+      const x0 = 640 + (s - 1) * 165;
+      t += `<rect class="pasillo-plano" x="${x0 + 57}" y="62" width="36" height="257"/>` + circulo(x0 + 75, 30, s);
       for (let k = 1; k <= 6; k++) {
-        const x = k <= 3 ? x0 : x0 + 100, y = 70 + ((k - 1) % 3) * 83; const it = D.partos[`${s}-${k}`] || [];
-        t += caja(x, y, 60, 83, it.length ? '' : 'libre') + num(x + 10, y + 16, k, 'num peq');
-        t += cerdosSVG(it, x + 2, y + 18, 56, 52, ancho);
-        if (it[0] && it[0].lechones != null) t += num(x + 30, y + 80, `+${it[0].lechones}`, 'num lech');
+        const x = k <= 3 ? x0 : x0 + 93, y = 62 + ((k - 1) % 3) * 85.6; const it = D.partos[`${s}-${k}`] || [];
+        t += caja(x, y, 57, 85.6, it.length ? '' : 'libre') + num(x + 10, y + 16, k, 'num peq');
+        t += cerdosSVG(it, x + 2, y + 18, 53, 52, ancho);
+        if (it[0] && it[0].lechones != null) t += num(x + 28, y + 82, `+${it[0].lechones}`, 'num lech');
       }
+      t += `<rect class="pared" x="${x0}" y="62" width="150" height="257"/>` + num(x0 + 75, 200, 'pasillo', 'num vertical');
     }
-    g += zona('partos', 640, 50, 480, 270, 'Parideras', t) + num(880, 345, 'PARIDERAS', 'rotulo');
+    g += zona('partos', 640, 50, 480, 270, 'Parideras', t) + num(880, 345, 'PARIDERAS · 3 SALAS', 'rotulo');
     // Parques de gestación: 3 y 4 arriba, 1 y 2 abajo
     t = '';
     [[3, 1150, 40], [4, 1380, 40], [1, 1150, 400], [2, 1380, 400]].forEach(([p, x, y]) => { const it = D.gestacion[p]; t += caja(x, y, 220, 270) + circulo(x + 110, y + 26, p) + cerdosSVG(it, x + 6, y + 48, 208, 200, ancho) + num(x + 110, y + 262, `${it.length}/8`, 'num peq'); });

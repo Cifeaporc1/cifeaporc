@@ -203,3 +203,6 @@ legend { font-weight: 700; padding: 0 6px; }
 .zonas-botones { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .zonas-botones a { display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 0 14px; background: #fff; border: 1px solid #DCE3DF; border-radius: 12px; text-decoration: none; color: var(--tinta); }
 .zonas-botones strong { color: var(--verde); font-size: 18px; }
+.plano .pared { fill: none; stroke: #1F2A24; stroke-width: 5; pointer-events: none; }
+.plano .pasillo-plano { fill: #E4E9E6; pointer-events: none; }
+.plano .num.vertical { font-size: 12px; font-weight: 400; fill: #6B756F; writing-mode: vertical-rl; letter-spacing: 2px; }
