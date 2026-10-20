@@ -202,6 +202,40 @@
     }
     return zonas;
   }
+  // ---- Lechoneras y cebadero: último recuento + movimientos posteriores ----
+  const ESTANCIAS = [...[1, 2, 3, 4].map((k) => `Lechonera ${k}`), ...Array.from({ length: 24 }, (_, i) => `Cebadero ${i + 1}`)];
+  const despues = (m, r) => !r || m.fecha > r.fecha || (m.fecha === r.fecha && String(m.creado) > String(r.creado));
+  function cuentaGrupos(recuentos, movs) {
+    const res = {};
+    for (const e of ESTANCIAS) res[e] = { n: 0, recuento: null, movs: [] };
+    for (const r of recuentos || []) { const x = res[r.estancia]; if (x && despues(r, x.recuento)) x.recuento = r; }
+    for (const e of ESTANCIAS) res[e].n = res[e].recuento ? res[e].recuento.n : 0;
+    for (const m of movs || []) {
+      for (const [lado, signo] of [['destino', 1], ['origen', -1]]) {
+        const x = res[m[lado]]; if (!x) continue;
+        x.movs.push(m);
+        if (despues(m, x.recuento)) x.n += signo * (Number(m.n) || 0);
+      }
+    }
+    return res;
+  }
+  function comprobarMovGrupo(v, actual, ctx) {
+    const errores = [], avisos = [];
+    if (!v.fecha) errores.push('Falta la fecha.'); else if (v.fecha > ctx.hoy) errores.push('La fecha no puede ser futura.');
+    const n = parseInt(v.n, 10);
+    if (!Number.isFinite(n) || n < 1) errores.push('Indica cuántos animales (1 o más).');
+    if (v.tipo !== 'entrada' && !v.origen) errores.push('Indica de dónde salen.');
+    if (['entrada', 'traslado'].includes(v.tipo) && !v.destino) errores.push('Indica a dónde van.');
+    if (v.tipo === 'traslado' && v.origen && v.origen === v.destino) errores.push('El origen y el destino no pueden ser el mismo.');
+    if (v.tipo === 'muerte' && !v.causa) errores.push('Indica la causa de la muerte.');
+    if (v.tipo === 'muerte' && v.causa === 'Otros' && !String(v.causa_otra || '').trim()) errores.push('Escribe la causa.');
+    if (v.tipo !== 'entrada' && v.origen && Number.isFinite(n) && n > (actual[v.origen] ? actual[v.origen].n : 0))
+      avisos.push(`Según la app, en ${v.origen} hay ${actual[v.origen] ? actual[v.origen].n : 0} animales y salen ${n}. Revisa el número o haz un recuento.`);
+    if (v.destino && v.destino.startsWith('Lechonera') && Number.isFinite(n) && (actual[v.destino] ? actual[v.destino].n : 0) + n > CAPACIDAD.Lechonera)
+      avisos.push(`${v.destino} pasaría de ${CAPACIDAD.Lechonera} lechones.`);
+    return { errores, avisos };
+  }
+
   // Traduce la ubicación guardada en los registros a un sitio del plano
   function sitioPlano(u) {
     let m;
@@ -378,7 +412,7 @@
     return { dia, restantes, estado };
   }
 
-  const api = { REF, CAUSAS_BAJA, CAPACIDAD, SANIDAD, ZONAS, usaProducto, comprobarSanidad, avisosSanidad, estadoDosis, FASES, sumarDias, dias, hoyISO, ordenar, estadoCerda, camada, fechasCiclo, indicesCiclo, avisos, ocupacion, capacidadDe, sitioPlano, comprobar };
+  const api = { REF, CAUSAS_BAJA, CAPACIDAD, SANIDAD, ZONAS, usaProducto, comprobarSanidad, avisosSanidad, estadoDosis, FASES, sumarDias, dias, hoyISO, ordenar, estadoCerda, camada, fechasCiclo, indicesCiclo, avisos, ocupacion, capacidadDe, sitioPlano, ESTANCIAS, cuentaGrupos, comprobarMovGrupo, comprobar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Logica = api;
 })(typeof window !== 'undefined' ? window : globalThis);

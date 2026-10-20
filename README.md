@@ -21,6 +21,7 @@ App web instalable para gestionar la explotación porcina de ciclo cerrado (chat
 | `sql/03_importar_historial.sql` | Historial de 14 cerdas importado de las fichas anteriores (repetible) |
 | `sql/04_nombres_alumnos.sql` | Nombre opcional de los alumnos, visible solo en su curso; se borra al cerrar el curso |
 | `sql/06_recuentos.sql` | Recuentos de animales en lechoneras y cebadero, para el plano (repetible) |
+| `sql/07_censo_alumnos.sql` | Altas y bajas por los alumnos (con firma e historial) y entradas, traslados, muertes y ventas en lechoneras y cebadero (repetible) |
 | `sql/05_sanidad_verracos.sql` | Sanidad (previstos y realizados), catálogo de medicamentos y extracciones de los verracos (repetible) |
 | `.github/workflows/mantener-activa.yml` | Evita que Supabase pause el proyecto en vacaciones |
 
