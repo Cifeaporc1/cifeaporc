@@ -285,6 +285,12 @@
         }
       }
     }
+    if (tipo === 'traslado') {
+      if (['paridera', 'lactante'].includes(est.fase) && v.zona && v.zona !== 'Partos')
+        avisosF.push(`La cerda figura como ${est.fase === 'lactante' ? 'lactante' : 'en paridera'}. ¿Seguro que sale de la sala de partos?${est.fase === 'lactante' ? ' Si se desteta, registra el destete.' : ''}`);
+      if (v.zona === 'Partos' && !['gestante', 'paridera', 'lactante'].includes(est.fase))
+        avisosF.push('La cerda no figura como gestante: ¿seguro que va a la sala de partos?');
+    }
     if (tipo === 'eco') {
       if (!ia) errores.push('No hay una inseminación abierta para esta cerda.');
       else if (v.fecha && dias(ia, v.fecha) < REF.ecoDesde)
@@ -357,8 +363,8 @@
     vacunacion:     { nombre: 'Vacunación', grupo: 'medicamento' },
     desparasitacion:{ nombre: 'Desparasitación', grupo: 'medicamento' },
     tratamiento:    { nombre: 'Tratamiento con medicamento', grupo: 'medicamento', motivo: true },
-    hierro:         { nombre: 'Hierro a los lechones', grupo: 'lechones', producto: true },
-    colmillos:      { nombre: 'Corte de colmillos', grupo: 'lechones', motivo: true },
+    hierro:         { nombre: 'Hierro y corte de colmillos', grupo: 'lechones', producto: true }, // se hacen a la vez
+    colmillos:      { nombre: 'Corte de colmillos', grupo: 'lechones', oculto: true },            // solo para registros antiguos
     raboteo:        { nombre: 'Raboteo', grupo: 'lechones', motivo: true },
     castracion:     { nombre: 'Castración', grupo: 'lechones', edad: true },
     limpieza:       { nombre: 'Limpieza', grupo: 'higiene' },

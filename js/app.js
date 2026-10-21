@@ -282,7 +282,7 @@
     inseminada: ['eco', 'ia', 'aborto', 'traslado', 'nota'],
     gestante: ['paridera', 'eco', 'parto', 'aborto', 'traslado', 'nota'],
     paridera: ['parto', 'aborto', 'traslado', 'nota'],
-    lactante: ['destete', 'adopcion', 'baja_lechones', 'nota'],
+    lactante: ['destete', 'adopcion', 'baja_lechones', 'traslado', 'nota'],
   };
 
   function puedeEditar(e) {
@@ -475,12 +475,14 @@
     traslado: {
       nombre: 'Traslado',
       campos: [F.fecha,
-        { n: 'zona', t: 'select', l: 'Zona', op: [['Vacías', 'Parque de vacías'], ['Implantación', 'Sala de implantación'], ['Gestación', 'Parque de gestación']] },
+        { n: 'zona', t: 'select', l: 'Zona', op: [['Vacías', 'Parque de vacías'], ['Implantación', 'Sala de implantación'], ['Gestación', 'Parque de gestación'], ['Partos', 'Sala de partos']] },
+        { n: 'sala', t: 'select', l: 'Sala de partos', op: rango(1, 3), si: (v) => v.zona === 'Partos' },
+        { n: 'plaza', t: 'select', l: 'Paridera', op: rango(1, 6), si: (v) => v.zona === 'Partos' },
         { n: 'parque', t: 'select', l: 'Parque', op: rango(1, 2), si: (v) => v.zona === 'Vacías' },
         { n: 'parque_g', t: 'select', l: 'Parque', op: rango(1, 4), si: (v) => v.zona === 'Gestación' },
         { n: 'jaula', t: 'select', l: 'Jaula', op: [['', 'Sin indicar'], ...rango(1, 10)], si: (v) => v.zona === 'Implantación' },
         F.obs],
-      ubicacion: (v) => (v.zona === 'Vacías' ? `Vacías · parque ${v.parque}` : v.zona === 'Gestación' ? `Gestación · parque ${v.parque_g}` : v.jaula ? `Implantación · jaula ${v.jaula}` : 'Implantación'),
+      ubicacion: (v) => (v.zona === 'Vacías' ? `Vacías · parque ${v.parque}` : v.zona === 'Gestación' ? `Gestación · parque ${v.parque_g}` : v.zona === 'Partos' ? `Partos · sala ${v.sala} · paridera ${v.plaza}` : v.jaula ? `Implantación · jaula ${v.jaula}` : 'Implantación'),
     },
     aborto: {
       nombre: 'Aborto',
@@ -1182,7 +1184,7 @@
           ${modo === 'realizar' ? '' : `<div class="campo"><span class="et" id="et-est">Estado</span><div class="opciones" role="radiogroup" aria-labelledby="et-est">
             <label><input type="radio" name="estado" value="realizado" ${v.estado === 'realizado' ? 'checked' : ''}> Realizado</label>
             <label><input type="radio" name="estado" value="previsto" ${v.estado === 'previsto' ? 'checked' : ''}> Previsto</label></div></div>`}
-          ${campo('tipo', '¿Qué se hace?', `<select id="s-tipo" name="tipo"><option value="">Elige…</option>${grupos.map(([g, gt]) => `<optgroup label="${gt}">${Object.entries(L.SANIDAD).filter(([, t]) => t.grupo === g).map(([k, t]) => opt(k, t.nombre, v.tipo)).join('')}</optgroup>`).join('')}</select>`)}
+          ${campo('tipo', '¿Qué se hace?', `<select id="s-tipo" name="tipo"><option value="">Elige…</option>${grupos.map(([g, gt]) => `<optgroup label="${gt}">${Object.entries(L.SANIDAD).filter(([k, t]) => t.grupo === g && (!t.oculto || k === v.tipo)).map(([k, t]) => opt(k, t.nombre, v.tipo)).join('')}</optgroup>`).join('')}</select>`)}
           ${campo('fecha', v.estado === 'previsto' ? 'Fecha prevista' : 'Fecha en que se realiza', inp('fecha', 'date', v.estado === 'realizado' ? `max="${L.sumarDias(hoy(), 1)}"` : ''))}
           ${T ? `
             ${grupo === 'lechones' ? '' : campo('ambito', '¿A quién o dónde?', `<select id="s-ambito" name="ambito">${(grupo === 'higiene' ? [['zona', 'Una zona'], ['granja', 'Toda la granja']] : [['granja', 'Toda la granja'], ['zona', 'Una zona'], ['cerda', 'Una cerda'], ['camada', 'Los lechones de una cerda'], ['verraco', 'Un verraco']]).map(([k, t]) => opt(k, t, v.ambito)).join('')}</select>`)}
@@ -1197,7 +1199,7 @@
               <div class="dos">${campo('dosis', 'Dosis', inp('dosis', 'text', 'placeholder="p. ej. 2 ml"'))}${campo('via', 'Vía / modo de aplicación', inp('via', 'text', 'placeholder="IM, oral, pulverizado…"'))}</div>
               ${v.estado === 'realizado' ? `<div class="dos">${campo('lote', 'Lote', inp('lote'))}${campo('caducidad', 'Caducidad', inp('caducidad', 'date'))}</div>` : ''}
             </fieldset>` : ''}
-            ${T.motivo || v.tipo === 'otro' ? campo('motivo', v.tipo === 'raboteo' ? 'Motivo (caudofagia detectada)' : v.tipo === 'colmillos' ? 'Motivo (lesiones observadas)' : 'Motivo', inp('motivo'), v.estado === 'previsto' ? ' <span class="suave">(opcional)</span>' : '') : ''}
+            ${T.motivo || v.tipo === 'otro' ? campo('motivo', v.tipo === 'raboteo' ? 'Motivo (caudofagia detectada)' : 'Motivo', inp('motivo'), v.estado === 'previsto' ? ' <span class="suave">(opcional)</span>' : '') : ''}
             ${campo('repetir_dias', 'Repetir cada (días)', inp('repetir_dias', 'number', 'inputmode="numeric" min="1" placeholder="Vacío si no se repite"'), ' <span class="suave">(opcional)</span>')}
             ${campo('obs', 'Observaciones', `<textarea id="s-obs" name="obs">${esc(v.obs || '')}</textarea>`, ' <span class="suave">(opcional)</span>')}
           ` : '<div class="suave">Elige qué se hace para ver el resto de campos.</div>'}
@@ -1331,7 +1333,7 @@
           <div class="dato"><span class="et">Ecografías +</span><span class="val">${s.ecos ? Math.round((100 * s.pos) / s.ecos) + ' %' : '—'}</span><span class="nota">${s.pos} de ${s.ecos}</span></div></div>
         <div class="dos"><div class="dato"><span class="et">Partos</span><span class="val">${s.partos}</span><span class="nota">de sus cubriciones</span></div>
           <div class="dato"><span class="et">Vivos por parto</span><span class="val">${s.partos ? (s.vivos / s.partos).toFixed(1).replace('.', ',') : '—'}</span><span class="nota">media</span></div></div>
-        <a class="btn" href="#/extraccion/${id}/nueva">${ICONOS.mas}Registrar extracción</a>
+        <div class="botones"><a class="btn" href="#/extraccion/${id}/nueva">${ICONOS.mas}Registrar extracción</a>${x.fecha_baja ? '' : `<a class="btn sec" href="#/trasladoverraco/${id}">Traslado</a>`}</div>
         <section class="tarjeta"><h2>Extracciones y dosis</h2>${exts.length ? exts.slice(0, 6).map(tarjetaExt).join('') + (exts.length > 6 ? `<details><summary class="suave" style="min-height:44px;display:flex;align-items:center">Ver ${exts.length - 6} anteriores</summary>${exts.slice(6).map(tarjetaExt).join('')}</details>` : '') : '<div class="suave">Sin extracciones registradas en esta granja.</div>'}
           <div class="suave peq">Día 0 = extracción · aviso el día ${L.REF.dosisAviso} · caducan después del día ${L.REF.dosisCaduca} · cada inseminación usa 2 dosis.</div></section>
         <section class="tarjeta"><h2>Últimas cubriciones</h2>${s.ultimas.length ? s.ultimas.slice(0, 8).map(({ c, ci }) => `<a class="cerda-fila" href="#/cerda/${c.id}"><div><strong>${esc(c.crotal)}</strong><div class="suave">IA ${fmt(ci.ia.fecha)}</div></div><span class="chip ${ci.parto ? '' : ci.cierre ? 'gris' : 'nar'}">${ci.parto ? `${L.camada(ci).vivos} vivos` : ci.cierre === 'aborto' ? 'Aborto' : ci.cierre ? 'Repetición' : 'En curso'}</span></a>`).join('') : '<div class="suave">Sin inseminaciones registradas.</div>'}</section>
@@ -1350,6 +1352,31 @@
       if (error) { toast(traducirError(error)); b.disabled = false; return; }
       toast('Extracción borrada'); await refrescar(); vistaVerraco(id);
     }));
+  }
+
+  function vistaTrasladoVerraco(id) {
+    const x = verracoPorId(id);
+    if (!x || x.fecha_baja) return vistaNoEncontrado();
+    const ocup = (k) => verracosActivos().filter((v) => v.id !== id && String(v.verraquera) === String(k)).map((v) => v.crotal);
+    pintar(`${cabecera({ volver: `#/verraco/${id}`, textoVolver: 'Cancelar', titulo: `Traslado de ${x.crotal}`, sub: `Ahora en ${x.verraquera ? `la verraquera ${x.verraquera}` : 'ninguna verraquera'}` })}
+      <main class="cuerpo"><form class="formu" id="f-tv" novalidate>
+        <div class="campo"><span class="et" id="et-vq">Pasa a la verraquera</span><div class="opciones" role="radiogroup" aria-labelledby="et-vq">
+          ${rango(1, 5).map((k) => { const o = ocup(k); return `<label><input type="radio" name="verraquera" value="${k}" ${String(x.verraquera) === k ? 'checked' : ''}> ${k}${o.length ? ` <span class="suave">(${esc(o.join(', '))})</span>` : ''}</label>`; }).join('')}</div></div>
+        <div class="suave peq">El censo es común: el cambio se ve también en la otra granja.</div>
+        <div id="mensajes" aria-live="polite"></div>
+        <button class="btn" type="submit">Guardar traslado</button>
+      </form></main>`);
+    let confirmado = false;
+    document.getElementById('f-tv').addEventListener('submit', async (ev) => {
+      ev.preventDefault(); const msj = document.getElementById('mensajes');
+      const k = new FormData(ev.target).get('verraquera');
+      if (!k) { msj.innerHTML = '<div class="error-caja" role="alert">Elige la verraquera.</div>'; return; }
+      if (String(k) === String(x.verraquera)) { msj.innerHTML = '<div class="error-caja" role="alert">Ya está en esa verraquera.</div>'; return; }
+      if (ocup(k).length && !confirmado) { confirmado = true; msj.innerHTML = `<div class="aviso-caja" role="alert">La verraquera ${k} ya tiene a ${esc(ocup(k).join(', '))}. Si van a compartirla, pulsa otra vez <strong>Guardar traslado</strong>.</div>`; return; }
+      const { error } = await sb.from('verracos').update({ verraquera: Number(k) }).eq('id', id);
+      if (error) { msj.innerHTML = `<div class="error-caja" role="alert">${esc(/Solo el profesor/.test(error.message || '') ? 'Falta volver a ejecutar en Supabase el archivo 07_censo_alumnos.sql para que los alumnos puedan trasladar verracos.' : traducirError(error))}</div>`; return; }
+      toast(`${x.crotal} pasa a la verraquera ${k}`); await refrescar(); location.hash = `#/verraco/${id}`;
+    });
   }
 
   function vistaExtraccion(verracoId, extId) {
@@ -1845,6 +1872,7 @@
       case 'movg': return vistaMovGrupo(a, b, c);
       case 'censo': return a === 'historial' ? vistaHistorialCenso() : vistaAnimal(a, b, 'censo');
       case 'extraccion': return vistaExtraccion(a, b);
+      case 'trasladoverraco': return vistaTrasladoVerraco(a);
       case 'sanidad':
         if (['nuevo', 'programar'].includes(a)) return vistaSanidadForm(a, null, { ambito: b, ref: c });
         if (['editar', 'realizar'].includes(a)) return vistaSanidadForm(a, b);

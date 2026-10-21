@@ -27,11 +27,11 @@ create table if not exists public.censo_mov (
 );
 create index if not exists censo_mov_creado on public.censo_mov (creado desc);
 
--- Reglas: cualquiera da altas y bajas. Un alumno no puede cambiar los datos de un animal
+-- Reglas: cualquiera da altas y bajas y traslada verracos de verraquera. Un alumno no puede cambiar los datos de un animal
 -- (salvo el que él mismo dio de alta hace menos de 24 h) ni anular una baja: eso, el profesor.
 create or replace function public.censo_control() returns trigger
 language plpgsql security definer set search_path = public as $$
-declare a text; prof boolean; quitar text[] := array['fecha_baja','causa_baja','baja_por','modificado','modificado_por'];
+declare a text; prof boolean; quitar text[] := array['fecha_baja','causa_baja','baja_por','modificado','modificado_por','verraquera'];
 begin
   select alias into a from perfiles where user_id = auth.uid();
   prof := auth.uid() is null or es_profesor();   -- sin usuario = SQL Editor (profesor)
