@@ -2,28 +2,35 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>CIFEAPORC</title>
-  <meta name="description" content="Gestión de la explotación porcina de ciclo cerrado del centro (chato murciano).">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CIFEAPORC ahora está en CIFEAFARM</title>
   <meta name="theme-color" content="#2F6B4F">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/png" href="img/icono-192.png">
-  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="CIFEAPORC">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/estilos.css?v=0.6.2">
+  <meta http-equiv="refresh" content="3;url=https://cifeaporc1.github.io/cifeafarm/porc/">
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #F7F1E3; color: #1E2A24; display: flex; min-height: 100vh; align-items: center; justify-content: center; text-align: center; padding: 24px; box-sizing: border-box; }
+    main { max-width: 420px; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+    img { width: 180px; border-radius: 16px; }
+    a { display: inline-block; background: #2F6B4F; color: #fff; text-decoration: none; font-weight: 700; padding: 14px 20px; border-radius: 12px; }
+    p { margin: 0; color: #5A6660; }
+  </style>
 </head>
 <body>
-  <div id="app" class="cargando-app">
-    <img src="img/logo.jpg" alt="CIFEAPORC" class="logo-carga">
-    <p>Cargando…</p>
-  </div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="js/config.js?v=0.6.2"></script>
-  <script src="js/logica.js?v=0.6.2"></script>
-  <script src="js/app.js?v=0.6.2"></script>
+  <main>
+    <img src="img/logo.jpg" alt="CIFEAPORC">
+    <h1 style="margin:0;font-size:22px">CIFEAPORC ahora está dentro de CIFEAFARM</h1>
+    <p>Se entra con el mismo alias y PIN. Instala CIFEAFARM en el móvil y desinstala esta app.</p>
+    <a id="ir" href="https://cifeaporc1.github.io/cifeafarm/porc/">Ir a CIFEAFARM</a>
+  </main>
+  <script>
+    // Lleva a la misma pantalla en CIFEAFARM y retira la app antigua de este dispositivo.
+    var destino = 'https://cifeaporc1.github.io/cifeafarm/porc/' + (location.hash || '');
+    document.getElementById('ir').href = destino;
+    var irYa = function () { location.replace(destino); };
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })
+        .then(function () { return window.caches ? caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k.indexOf('cifeaporc') === 0; }).map(function (k) { return caches.delete(k); })); }) : null; })
+        .then(irYa, irYa);
+    } else irYa();
+  </script>
 </body>
 </html>

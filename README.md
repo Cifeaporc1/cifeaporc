@@ -1,3 +1,7 @@
+> **Esta app ya no se usa.** CIFEAPORC está integrada en **CIFEAFARM** (https://cifeaporc1.github.io/cifeafarm/, repositorio [cifeafarm](https://github.com/Cifeaporc1/cifeafarm)). Esta dirección redirige allí.
+>
+> Se mantiene este repositorio por dos motivos: la tarea `.github/workflows/mantener-activa.yml`, que evita que Supabase pause el proyecto (CIFEAFARM usa la misma base de datos), y los archivos `sql/` del esquema de porcino.
+
 # CIFEAPORC
 
 App web instalable para gestionar la explotación porcina de ciclo cerrado (chato murciano) del centro, con una granja para 1.º y otra para 2.º sobre el mismo censo de animales.
